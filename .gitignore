@@ -1,0 +1,14 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# 환경설정 및 인증 정보
+credentials.json
+.env
+*.log
+
+# PyQt 빌드 파일
+*.ui.py
+
+# 기타 무시하고 싶은 파일
+*.bak

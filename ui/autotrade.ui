@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>1200</width><height>800</height></rect>
+  </property>
+  <property name="windowTitle">
+   <string>AutoTrade</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="main_layout">
+    <item>
+     <layout class="QHBoxLayout" name="topBar">
+      <item><widget class="QPushButton" name="login_button"><property name="text"><string>로그인</string></property></widget></item>
+      <item><widget class="QPushButton" name="trade_start_button"><property name="text"><string>매매 시작</string></property></widget></item>
+      <item><widget class="QPushButton" name="trade_stop_button"><property name="text"><string>매매 종료</string></property></widget></item>
+      <item><widget class="QLabel" name="strategy_label"><property name="text"><string>전략 선택 :</string></property></widget></item>
+      <item><widget class="QComboBox" name="strategy_dropdown"/></item>
+      <item><widget class="QLineEdit" name="strategy_name_input"><property name="placeholderText"><string>전략 이름 입력</string></property></widget></item>
+      <item><widget class="QPushButton" name="strategy_save_button"><property name="text"><string>전략 저장</string></property></widget></item>
+      <item><widget class="QPushButton" name="strategy_delete_button"><property name="text"><string>전략 삭제</string></property></widget></item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="topInfoLayout">
+      <item>
+       <widget class="QGroupBox" name="account_info_group">
+        <property name="title"><string>계좌 정보</string></property>
+        <layout class="QVBoxLayout" name="verticalLayout_account_info">
+         <item>
+          <layout class="QHBoxLayout" name="account_combo_layout">
+           <item><widget class="QLabel" name="account_label"><property name="text"><string>계좌 :</string></property></widget></item>
+           <item><widget class="QComboBox" name="account_combo"/></item>
+          </layout>
+         </item>
+         <item><widget class="QLabel" name="account_info_label"><property name="text"><string>계좌 정보 없음</string></property><property name="alignment"><set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set></property></widget></item>
+        </layout>
+       </widget>
+      </item>
+      <item><widget class="QGroupBox" name="buy_settings_group"><property name="title"><string>📈 분할매수</string></property><layout class="QVBoxLayout"/></widget></item>
+      <item><widget class="QGroupBox" name="sell_settings_group"><property name="title"><string>📉 분할매도</string></property><layout class="QVBoxLayout"/></widget></item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="accountButtonsLayout">
+      <item><widget class="QPushButton" name="account_button_1"><property name="text"><string>계좌1</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+      <item><widget class="QPushButton" name="account_button_2"><property name="text"><string>계좌2</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+      <item><widget class="QPushButton" name="account_button_3"><property name="text"><string>계좌3</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+      <item><widget class="QPushButton" name="account_button_4"><property name="text"><string>계좌4</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QTabWidget" name="account_tab">
+      <property name="minimumSize"><size><width>0</width><height>180</height></size></property>
+      <widget class="QWidget" name="tab_holdings"><attribute name="title"><string>📊 잔고</string></attribute><layout class="QVBoxLayout"><item><widget class="QTableWidget" name="holdings_table"/></item></layout></widget>
+      <widget class="QWidget" name="tab_unsettled"><attribute name="title"><string>📦 미체결</string></attribute><layout class="QVBoxLayout"><item><widget class="QTableWidget" name="unsettled_table"/></item></layout></widget>
+      <widget class="QWidget" name="tab_trade_log"><attribute name="title"><string>🧾 매매내역</string></attribute><layout class="QVBoxLayout"><item><widget class="QTableWidget" name="trade_log_table"/></item></layout></widget>
+     </widget>
+    </item>
+    
+<item>
+ <layout class="QHBoxLayout" name="watchlist_and_log_layout">
+  <item>
+   <widget class="QTabWidget" name="watchlist_tabwidget">
+    <property name="minimumSize">
+     <size>
+      <width>0</width>
+      <height>180</height>
+     </size>
+    </property>
+    <widget class="QWidget" name="tab_watchlist">
+     <attribute name="title">
+      <string>📋 관심종목</string></attribute>
+     <layout class="QVBoxLayout">
+        <item>
+            <widget class="QPushButton" name="watchlist_button">
+            <property name="text"><string>관심종목 불러오기</string></property>
+            </widget>
+        </item>
+        <item>
+       <widget class="QTableWidget" name="stock_search_table"/>
+      </item>
+     </layout>
+    </widget>
+    <widget class="QWidget" name="tab_condition">
+     <attribute name="title">
+      <string>🔍 조건검색</string>
+     </attribute>
+     <layout class="QVBoxLayout">
+      <item>
+       <layout class="QHBoxLayout">
+        <item>
+         <widget class="QComboBox" name="condition_dropdown"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="condition_search_button">
+          <property name="text">
+           <string>조건식 실행</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QTableWidget" name="condition_table"/>
+      </item>
+     </layout>
+    </widget>
+   </widget>
+  </item>
+  <item>
+   <layout class="QVBoxLayout">
+    <item>
+     <widget class="QLabel" name="log_label">
+      <property name="text">
+       <string>📝 로그</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignLeft</set>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QTextEdit" name="log_box">
+      <property name="minimumSize">
+       <size>
+        <width>400</width>
+        <height>200</height>
+       </size>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </item>
+ </layout>
+</item>
+
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,53 @@
+{
+  "buy": {
+    "order_type": "시장가",
+    "test_mode": false,
+    "accounts": {
+      "계좌1": {
+        "enabled": true,
+        "amount": 10000.0,
+        "drop_rate": -1.0
+      },
+      "계좌2": {
+        "enabled": true,
+        "amount": 10000.0,
+        "drop_rate": -2.0
+      },
+      "계좌3": {
+        "enabled": true,
+        "amount": 10000.0,
+        "drop_rate": -2.0
+      },
+      "계좌4": {
+        "enabled": true,
+        "amount": 10000.0,
+        "drop_rate": -2.0
+      }
+    }
+  },
+  "sell": {
+    "order_type": "시장가",
+    "accounts": {
+      "계좌1": {
+        "enabled": true,
+        "ratio": 100.0,
+        "profit_rate": 3.0
+      },
+      "계좌2": {
+        "enabled": true,
+        "ratio": 100.0,
+        "profit_rate": 3.0
+      },
+      "계좌3": {
+        "enabled": true,
+        "ratio": 100.0,
+        "profit_rate": 3.0
+      },
+      "계좌4": {
+        "enabled": true,
+        "ratio": 100.0,
+        "profit_rate": 3.0
+      }
+    }
+  }
+}

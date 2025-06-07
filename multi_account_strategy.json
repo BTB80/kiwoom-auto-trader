@@ -1,0 +1,30 @@
+{
+  "계좌1": {
+    "buy_trigger": -2.0,
+    "rebuy_trigger": -3.0,
+    "sell_trigger": 3.0,
+    "holdings": {},
+    "history": []
+  },
+  "계좌2": {
+    "buy_trigger": -2.0,
+    "rebuy_trigger": -2.0,
+    "sell_trigger": 3.0,
+    "holdings": {},
+    "history": []
+  },
+  "계좌3": {
+    "buy_trigger": -2.0,
+    "rebuy_trigger": -2.0,
+    "sell_trigger": 3.0,
+    "holdings": {},
+    "history": []
+  },
+  "계좌4": {
+    "buy_trigger": -2.0,
+    "rebuy_trigger": -2.0,
+    "sell_trigger": 3.0,
+    "holdings": {},
+    "history": []
+  }
+}
