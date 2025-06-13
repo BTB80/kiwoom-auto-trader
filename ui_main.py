@@ -47,8 +47,8 @@ from utils import (
 # ✅ 스타일 상수 추가
 UNIFORM_BUTTON_STYLE = """
 QPushButton {
-    min-width: 60px;
-    max-width: 60px;
+    min-width: 100px;
+    max-width: 100px;
     min-height: 20px;
     max-height: 20px;
     font-size: 12px;
@@ -78,12 +78,14 @@ QPushButton {
 """
 LOGIN_STYLE = """
 QPushButton {
-    background-color: #4CAF50;   /* 초록색 */
+    background-color: #4CAF50;
     color: white;
     font-weight: bold;
     border: 1px solid #2e7d32;
     border-radius: 6px;
     padding: 4px 12px;
+    min-width: 100px;
+    max-width: 100px;
 }
 """
 UNSELECTED_STYLE = """
@@ -405,7 +407,7 @@ class AutoTradeUI(QMainWindow):
         ]:
             btn = self.findChild(QPushButton, name)
             if btn:
-                btn.setFixedWidth(uniform_width)  # 또는 setMinimumWidth(uniform_width)
+                btn.setFixedWidth(uniform_width)
 
             
         account_tab = self.findChild(QTabWidget, "account_tab")
@@ -605,13 +607,13 @@ class AutoTradeUI(QMainWindow):
 
         else:
             log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
-
-        def on_login_complete(self):
-            self.trade_start_button.setEnabled(False)  # 🔒 먼저 비활성화
-            self.login_button.setStyleSheet(LOGIN_STYLE)
-            self.manager.request_all_holdings(
-                accounts=self.manager.accounts,
-                on_complete=self.on_holdings_loaded
+            
+    def on_login_complete(self):
+                self.trade_start_button.setEnabled(False)  # 🔒 먼저 비활성화
+                self.login_button.setStyleSheet(LOGIN_STYLE)
+                self.manager.request_all_holdings(
+                    accounts=self.manager.accounts,
+                    on_complete=self.on_holdings_loaded   
             )
 
     @pyqtSlot()
