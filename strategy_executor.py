@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QTableWidgetItem
 from modules.telegram_utils import send_telegram_message
 from modules.google_writer import append_trade_log
-
+from utils import write_trade_log_file
 from utils import (
     log_debug,
     log_info,
@@ -313,6 +313,8 @@ class AutoTradeExecutor:
 
         if "매수" in order_type_str:
             log_info(None, f"[🟢 매수 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
+            write_trade_log_file(f"[🟢 매수 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
+
             self.pending_buys.discard((code, account_no))
 
             account_holdings = self.holdings.setdefault(code, {})
@@ -359,6 +361,7 @@ class AutoTradeExecutor:
         elif any(k in order_type_str for k in ["매도", "현금매도", "신용매도"]):
             print(f"📍 매도 블록 진입: {code} | 계좌: {account_no}")
             log_info(None, f"[🔴 매도 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
+            write_trade_log_file(f"[🔴 매도 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
 
             # ✅ holdings 정리
             holdings_targets = [self.holdings]
