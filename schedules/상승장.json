@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "start_time": "08:58",
+  "end_time": "23:20",
+  "blocks": [
+    {
+      "enabled": true,
+      "time": "08:58",
+      "strategy": "기본",
+      "condition": "9: 장초반"
+    },
+    {
+      "enabled": true,
+      "time": "13:00",
+      "strategy": "기본",
+      "condition": "12: 장중반"
+    },
+    {
+      "enabled": true,
+      "time": "15:15",
+      "strategy": "기본",
+      "condition": "17: 종가매매"
+    }
+  ]
+}

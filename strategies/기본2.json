@@ -1,6 +1,6 @@
 {
   "buy": {
-    "order_type": "시장가",
+    "order_type": "지정가",
     "test_mode": false,
     "accounts": {
       "계좌1": {
@@ -26,7 +26,7 @@
     }
   },
   "sell": {
-    "order_type": "시장가",
+    "order_type": "지정가",
     "accounts": {
       "계좌1": {
         "enabled": true,

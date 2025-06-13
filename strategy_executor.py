@@ -1,7 +1,7 @@
 from datetime import datetime
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QTableWidgetItem
-
+from modules.telegram_utils import send_telegram_message
 from modules.google_writer import append_trade_log
 
 from utils import (
@@ -61,6 +61,10 @@ class AutoTradeExecutor:
         if code.startswith("A"):
             code = code[1:]
 
+        if not self.holdings:
+            log_debug(None, f"[🛑 holdings 비어있음] {code} → 매수 평가 생략")
+            return
+
         accounts = self.buy_settings.get("accounts", {})
 
         for i, acc in enumerate(["계좌1", "계좌2", "계좌3", "계좌4"]):
@@ -73,43 +77,50 @@ class AutoTradeExecutor:
 
             # ✅ 이미 보유 중이면 매수 금지
             if self.holdings.get(code, {}).get(account_no, {}).get("qty", 0) > 0:
-                log_debug(None, f"[⛔ 중복보유] {code}는 계좌 {account_no}에서 이미 보유 중 → 매수 생략")
+                log_debug(None, f"[⛔ 중복보유] {code}는 계좌 {account_no}에서 이미 보유 중 → 생략")
                 continue
 
             # ✅ 체결 대기 중이면 생략
             if (code, account_no) in self.pending_buys:
-                log_debug(None, f"[⛔ 체결대기] {code} / 계좌={account_no} → 매수 생략")
+                log_debug(None, f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
                 continue
 
-            # ✅ 계좌1은 전일종가 기준 + 매도이력 있는 경우 재매수 제한
             if step == 1:
-                if code in self.sell_history:
-                    log_debug(None, f"[⏸ 계좌1 재매수 제한] {code} / 매도 기록 있음 → 대기")
+                # ✅ 계좌1: 보유 종목 수 제한 + 매도 기록이 있으면 재매수 금지
+                max_holdings = 10
+                if hasattr(self, "manager") and hasattr(self.manager, "ui"):
+                    try:
+                        max_holdings = int(self.manager.ui.max_holdings_input.text())
+                    except:
+                        pass
+
+                current_holdings = [
+                    c for c, acc_map in self.holdings.items()
+                    if acc_map.get(account_no, {}).get("qty", 0) > 0
+                ]
+                if len(current_holdings) >= max_holdings:
+                    log_debug(None, f"[⛔ 계좌1 종목수 제한] {len(current_holdings)}개 보유 중 → 생략")
                     continue
+
+                if code in self.sell_history:
+                    log_debug(None, f"[⏸ 계좌1 재매수 제한] {code} / 매도 이력 있음 → 생략")
+                    continue
+
                 base_price = self.get_previous_close(code)
 
-            # ✅ 계좌2~4는 전단계 보유 or 재진입 여부 판단
             else:
+                # ✅ 계좌2~4: 전단계 계좌가 보유 중이면 매도 이력 상관없이 평가
                 prev_account = self.get_account_by_step(step - 1)
                 prev_holding = self.holdings.get(code, {}).get(prev_account)
-                prev_sell_price = self.sell_history.get(code, {}).get(prev_account, 0)
 
                 if prev_holding and prev_holding.get("qty", 0) > 0:
                     base_price = prev_holding.get("buy_price", current_price)
-                elif prev_sell_price > 0:
-                    reentry_drop = acc_conf.get("reentry_drop", -2.0)
-                    reentry_price = prev_sell_price * (1 + reentry_drop / 100)
-                    if current_price > reentry_price:
-                        log_debug(None, f"[⛔ 재진입 조건 미충족] {code} / 현재가={current_price} > 목표={reentry_price:.2f}")
-                        continue
-                    else:
-                        base_price = prev_sell_price
-                        log_debug(None, f"[🔁 재진입 조건 충족] {code} / 현재가={current_price} <= 목표={reentry_price:.2f}")
+                    log_debug(None, f"[✅ 계좌{step} 조건충족] 전계좌({prev_account}) 보유 중 → 기준가={base_price}")
                 else:
-                    log_debug(None, f"[⛔ 전단계 미보유 + 매도기록 없음] {code} / {prev_account} → 계좌 {account_no} 평가 생략")
+                    log_debug(None, f"[⛔ 계좌{step} 조건불충족] 전계좌({prev_account}) 미보유 → 평가 생략")
                     continue
 
-            # ✅ 목표가 계산 및 매수 조건 평가
+            # 🎯 drop 조건 비교
             drop_rate = acc_conf.get("drop_rate", 0)
             target_price = base_price * (1 + drop_rate / 100)
 
@@ -118,14 +129,12 @@ class AutoTradeExecutor:
 
             if current_price <= target_price:
                 amount = acc_conf.get("amount", 0)
-                log_info(None, f"[✅ 매수 조건 만족] {code} / 계좌={account_no} / amount={amount}")
+                log_info(None, f"[✅ 매수 조건 만족] {code} / 계좌={account_no} / 금액: {amount}")
                 self.send_buy_order(code, amount, step, current_price)
                 self.pending_buys.add((code, account_no))
             else:
                 if SHOW_VERBOSE_BUY_EVAL:
                     log_debug(None, f"[❌ 조건 미충족] {code} / 현재가={current_price} > 목표가={target_price:.2f}")
-
-
 
 
     def send_buy_order(self, code, amount, step, current_price):
@@ -163,6 +172,7 @@ class AutoTradeExecutor:
 
 
     def evaluate_sell(self, code, current_price):
+        # print(f"[매도 평가 시도] {code} / 현재가: {current_price}")
         if not self.enabled:
             log_debug(None, f"[⏸ 매도 평가 중단] 자동매매 비활성화 상태")
             return
@@ -178,6 +188,7 @@ class AutoTradeExecutor:
             return
 
         for i, account in enumerate(self.accounts):
+            # print(f" - 계좌 검사: {account} / 보유 여부: {account in self.holdings.get(code, {})}")
             holding = self.holdings[code].get(account)
             if not holding:
                 log_debug(None, f"[⛔ 해당 계좌 보유 없음] {code} / 계좌: {account}")
@@ -196,7 +207,8 @@ class AutoTradeExecutor:
 
             buy_price = holding.get("buy_price", 0)
             qty = holding.get("qty", 0)
-
+            # print(f"[📦 보유정보] {code} / 계좌:{account} / qty={qty}, buy_price={buy_price}")
+            
             if qty <= 0:
                 log_debug(None, f"[📦 매도 불가: 수량 없음] {code} / 계좌: {account}")
                 continue
@@ -259,8 +271,10 @@ class AutoTradeExecutor:
 
 
     def handle_chejan_data(self, gubun, item_cnt, fid_list):
+        print("✅ handle_chejan_data 진입")
+
         if SHOW_DEBUG:
-            log_debug(None, f"[\U0001F4E5 Chejan 수신] gubun={gubun}")
+            log_debug(None, f"[📨 Chejan 수신] gubun={gubun}")
 
         if gubun != "0":
             if SHOW_DEBUG:
@@ -276,8 +290,9 @@ class AutoTradeExecutor:
         order_type_str = self.api.ocx.dynamicCall("GetChejanData(int)", 920).strip()
 
         if SHOW_DEBUG:
-            log_debug(None, f"[🧪 체결 판별] status={order_status}, qty={filled_qty}, "
-                            f"order_type={order_type_str}, price={price_str}, code={code}, acc={account_no}")
+            log_debug(None, f"[🧪 체결 판별] status={order_status}, qty={filled_qty}, order_type={order_type_str}, price={price_str}, code={code}, acc={account_no}")
+
+        print(f"[🧪 Chejan DEBUG] order_type_str={order_type_str}, status={order_status}, qty={filled_qty}")
 
         if order_status != "체결" or not filled_qty.isdigit():
             return
@@ -298,38 +313,54 @@ class AutoTradeExecutor:
 
         if "매수" in order_type_str:
             log_info(None, f"[🟢 매수 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
-            self.pending_buys.discard(code)
+            self.pending_buys.discard((code, account_no))
 
-            holding = self.holdings.setdefault(code, {}).get(account_no)
-            if holding:
-                total_qty = holding.get("qty", 0) + qty
-                prev_amt = holding.get("buy_price", 0) * holding.get("qty", 0)
-                new_avg_price = (prev_amt + qty * price) // total_qty
-                self.holdings[code][account_no] = {"buy_price": new_avg_price, "qty": total_qty}
+            account_holdings = self.holdings.setdefault(code, {})
+            if account_no in account_holdings:
+                prev_qty = account_holdings[account_no].get("qty", 0)
+                prev_price = account_holdings[account_no].get("buy_price", 0)
+                new_qty = prev_qty + qty
+                new_avg_price = (prev_qty * prev_price + qty * price) // new_qty
+                account_holdings[account_no] = {"buy_price": new_avg_price, "qty": new_qty}
             else:
-                self.holdings.setdefault(code, {})[account_no] = {"buy_price": price, "qty": qty}
+                account_holdings[account_no] = {"buy_price": price, "qty": qty}
 
-            # ✅ executor.holdings 동기화 보장
+            # ✅ buy_history 갱신
+            if hasattr(self, "reconstruct_buy_history_from_holdings"):
+                self.reconstruct_buy_history_from_holdings()
+                self.reconstruct_sell_history_from_holdings()
+
             if hasattr(self, "manager"):
                 self.manager.holdings = self.holdings
-                if hasattr(self, "reconstruct_buy_history_from_holdings"):
-                    self.reconstruct_buy_history_from_holdings()
-
-            # if strategy_name != "복원":
-            #     append_trade_log("1ebHJV_SOg50092IH88yNK5ecPgx_0UBWu5EybpBWuuU", row, "자동매매내역")
-
-            if hasattr(self.manager, 'request_holdings'):
-                self.manager.request_holdings(account_no)
+                if hasattr(self.manager, 'current_account'):
+                    self.manager.current_account = account_no
+                if hasattr(self.manager, 'request_holdings'):
+                    self.manager.request_holdings(account_no)
+                    QTimer.singleShot(2000, lambda: self.manager.request_holdings(account_no))
 
             if code in self.sell_history:
                 if SHOW_DEBUG:
                     log_debug(None, f"[🧹 재매수 감지 → sell_history 정리] {code}")
                 self.sell_history.pop(code)
 
-        elif "매도" in order_type_str:
+            msg = (
+                f"[🟢 매수 체결]\n"
+                f"📌 종목: {code} ({name})\n"
+                f"📆 시간: {time}\n"
+                f"💰 수량: {qty}주 @ {price:,}원\n"
+                f"📊 체결금액: {amount:,}원\n"
+                f"🧾 실현금액: {settled:,}원\n"
+                f"🎯 전략: {strategy_name}\n"
+                f"🏦 계좌: {account_no}"
+            )
+            print("📨 텔레그램 메시지 전송 시도:", msg[:30])
+            send_telegram_message(msg)
+
+        elif any(k in order_type_str for k in ["매도", "현금매도", "신용매도"]):
+            print(f"📍 매도 블록 진입: {code} | 계좌: {account_no}")
             log_info(None, f"[🔴 매도 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
 
-            # ✅ self.holdings, manager.holdings 동시 처리
+            # ✅ holdings 정리
             holdings_targets = [self.holdings]
             if hasattr(self.manager, 'holdings'):
                 holdings_targets.append(self.manager.holdings)
@@ -344,16 +375,41 @@ class AutoTradeExecutor:
                         if not h[code]:
                             del h[code]
 
-            # if strategy_name != "복원":
-            #     append_trade_log("1ebHJV_SOg50092IH88yNK5ecPgx_0UBWu5EybpBWuuU", row, "자동매매내역")
+            # ✅ sell_history 반영
+            self.sell_history[code] = {"price": price, "time": now}
+            self.buy_history.pop(code, None)
 
             if hasattr(self.manager, 'request_today_profit'):
                 self.manager.request_today_profit(account_no)
-
-            # ✅ 2단계 요청으로 잔고 완전 정리 보장
+            if hasattr(self.manager, 'current_account'):
+                self.manager.current_account = account_no
             if hasattr(self.manager, 'request_holdings'):
                 self.manager.request_holdings(account_no)
                 QTimer.singleShot(2000, lambda: self.manager.request_holdings(account_no))
+
+            if hasattr(self.manager, "ui") and hasattr(self.manager.ui, "account_combo"):
+                combo = self.manager.ui.account_combo
+                idx = combo.findText(account_no)
+                if idx != -1:
+                    combo.setCurrentIndex(idx)
+
+            if hasattr(self.manager, 'refresh_holdings_ui'):
+                QTimer.singleShot(500, self.manager.refresh_holdings_ui)
+                QTimer.singleShot(1500, self.manager.refresh_holdings_ui)
+                QTimer.singleShot(3000, self.manager.refresh_holdings_ui)
+
+            msg = (
+                f"[🔴 매도 체결]\n"
+                f"📌 종목: {code} ({name})\n"
+                f"📆 시간: {time}\n"
+                f"💰 수량: {qty}주 @ {price:,}원\n"
+                f"📊 체결금액: {amount:,}원\n"
+                f"🧾 실현금액: {settled:,}원\n"
+                f"🎯 전략: {strategy_name}\n"
+                f"🏦 계좌: {account_no}"
+            )
+            print("📨 텔레그램 메시지 전송 시도:", msg[:30])
+            send_telegram_message(msg)
 
         if hasattr(self.manager, 'trade_log_table'):
             row_pos = self.manager.trade_log_table.rowCount()
@@ -363,19 +419,24 @@ class AutoTradeExecutor:
                 item.setTextAlignment(Qt.AlignCenter if col in [0, 1, 2, 3, 5, 12] else Qt.AlignRight)
                 self.manager.trade_log_table.setItem(row_pos, col, item)
 
-        # ✅ holdings UI 리렌더링 보강
         if hasattr(self.manager, 'refresh_holdings_ui'):
+            self.manager.refresh_holdings_ui()
             QTimer.singleShot(1500, self.manager.refresh_holdings_ui)
-            QTimer.singleShot(3000, self.manager.refresh_holdings_ui)
-
         if hasattr(self.manager, 'update_ui'):
             QTimer.singleShot(1600, self.manager.update_ui)
 
 
     def reconstruct_buy_history_from_holdings(self):
+        # ✅ 이미 복원된 경우 생략
+        if self.buy_history:
+            if SHOW_DEBUG:
+                log_debug(None, "[⏩ 복원 생략] buy_history가 이미 채워져 있음")
+            return
+
         new_buy_history = {}
         new_holdings = {}
 
+        # 1️⃣ holdings 기반으로 buy_history 및 holdings 재구성
         for raw_code, account_data in self.holdings.items():
             code = raw_code[1:] if raw_code.startswith("A") else raw_code
 
@@ -386,37 +447,96 @@ class AutoTradeExecutor:
                     price = holding.get("buy_price", 0)
                     step = i + 1
 
-                    # ❗ buy_price가 없는 경우 건너뜀
-                    if qty <= 0 or price <= 0:
-                        continue
+                    # ✅ holdings 재구성은 수량이 있을 때만
+                    if qty > 0 and price > 0:
+                        new_holdings.setdefault(code, {})[account] = {
+                            "buy_price": price,
+                            "qty": qty
+                        }
 
-                    # ✅ buy_history는 최초 보유 계좌 기준
-                    if code not in new_buy_history:
-                        new_buy_history[code] = {"price": price, "step": step}
+                    # ✅ buy_history는 qty/price 없어도 step 기준으로 복원
+                    if code not in new_buy_history and step:
+                        new_buy_history[code] = {"price": price or 0, "step": step}
+                        if SHOW_DEBUG:
+                            log_debug(None, f"🔁 {code} → buy_history 복원: step={step}, price={price}")
 
-                    # ✅ holdings 딕셔너리 업데이트
-                    new_holdings.setdefault(code, {})[account] = {
-                        "buy_price": price,
-                        "qty": qty
-                    }
-
-                    if SHOW_DEBUG:
-                        log_debug(None, f"🔁 {code} 매수 복원: 계좌{step} / 수량={qty} / 단가={price}")
+        # 2️⃣ sell_history 기반 누락 보정 (step 정보 유지)
+        for code, sell_info in self.sell_history.items():
+            if code not in new_buy_history:
+                new_buy_history[code] = {"price": 0, "step": sell_info.get("step", 1)}
+                if SHOW_DEBUG:
+                    log_debug(None, f"📌 {code} → sell_history 기반 buy_history 추가: step={sell_info.get('step', 1)}")
 
         self.buy_history = new_buy_history
         self.holdings = new_holdings
 
+        if SHOW_DEBUG:
+            log_debug(None, f"✅ buy_history 복원 완료: {len(new_buy_history)} 종목")
+            self.print_holdings_summary()  # 🔍 자동 복원 직후 보유 상태 확인
+
+
+
 
     def reconstruct_sell_history_from_holdings(self):
-        for code in list(self.buy_history.keys()):
+        # 전체 종목 목록: buy_history + holdings 키 통합
+        all_codes = set(self.buy_history.keys()) | set(self.holdings.keys())
+
+        for code in list(all_codes):
+            # ✅ 모든 계좌에서 해당 종목을 보유하고 있지 않으면 → 매도 기록 복원
             no_holding = all(
-                acc not in self.holdings.get(code, {}) for acc in self.accounts
+                acc not in self.holdings.get(code, {}) or self.holdings[code][acc].get("qty", 0) <= 0
+                for acc in self.accounts
             )
+
             if no_holding:
-                step = self.buy_history[code]["step"]
+                step = self.buy_history.get(code, {}).get("step", 1)
                 self.sell_history[code] = {"step": step}
+
                 if SHOW_DEBUG:
-                    log_debug(None, f"🔁 {code} 매도기록 복원 (step={step})")
+                    log_debug(None, f"🔁 {code} 매도기록 복원됨 (step={step})")
+
+    def reconstruct_pending_buys_from_unsettled(self):
+        if not hasattr(self.manager, 'unsettled_table'):
+            return
+
+        table = self.manager.unsettled_table
+        rows = table.rowCount()
+
+        for row in range(rows):
+            name_item = table.item(row, 1)
+            type_item = table.item(row, 2)
+            remain_item = table.item(row, 5)
+
+            if not name_item or not type_item or not remain_item:
+                continue
+
+            name = name_item.text().strip()
+            order_type = type_item.text().strip()
+            remain_qty = int(remain_item.text().replace(",", "") or "0")
+
+            if remain_qty > 0 and "매수" in order_type:
+                # 이름으로 코드 찾기
+                code = self.get_code_by_name(name)
+                account = self.manager.current_account
+                if code and account:
+                    self.pending_buys.add((code, account))
+                    log_debug(None, f"⏳ 미체결 복원: {code} / 계좌={account} → 체결 대기 등록됨")
+
+    def get_code_by_name(self, name):
+        for code, info in self.basic_info_map.items():
+            if info.get("name") == name:
+                return code
+        return None
 
     def set_manager(self, manager):
         self.manager = manager
+         
+
+    def print_holdings_summary(self):
+        print("📋 [보유 종목 요약]")
+        for code, acc_map in self.holdings.items():
+            print(f"📦 종목코드: {code}")
+            for acc, info in acc_map.items():
+                qty = info.get("qty", 0)
+                price = info.get("buy_price", 0)
+                print(f"  └ 계좌: {acc} | 수량: {qty} | 단가: {price}")

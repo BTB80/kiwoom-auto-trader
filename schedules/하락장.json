@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "start_time": "08:58",
+  "end_time": "23:20",
+  "blocks": [
+    {
+      "enabled": false,
+      "time": "08:58",
+      "strategy": "기본",
+      "condition": "2: 자동매매기본"
+    },
+    {
+      "enabled": false,
+      "time": "13:00",
+      "strategy": "기본",
+      "condition": "15: 자동매매"
+    },
+    {
+      "enabled": false,
+      "time": "15:15",
+      "strategy": "기본",
+      "condition": "4: 자동매매적용"
+    }
+  ]
+}

@@ -16,10 +16,6 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
         manager.deposit = to_int(raw)
         log(manager.log_box, f"💰 예수금: {manager.deposit:,} 원")
 
-        est_raw = manager.api.get_comm_data(tr_code, rq_name, 0, "추정예탁자산").replace(",", "")
-        manager.estimated_asset = to_int(est_raw)
-        log(manager.log_box, f"📈 추정예탁자산: {manager.estimated_asset:,} 원")
-
         available_raw = manager.api.get_comm_data(tr_code, rq_name, 0, "주문가능금액").replace(",", "")
         manager.available_cash = to_int(available_raw)
         log(manager.log_box, f"🧾 주문가능금액: {manager.available_cash:,} 원")
@@ -153,3 +149,13 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
             # ✅ 중복 아니면 기록하고 key 저장
             # append_trade_log("1ebHJV_SOg50092IH88yNK5ecPgx_0UBWu5EybpBWuuU", row, "자동매매내역")
             manager.existing_trade_keys.add(key)
+            
+    elif rq_name == "추정자산조회":
+        raw = manager.api.get_comm_data(tr_code, rq_name, 0, "추정예탁자산").strip()
+        manager.estimated_asset = to_int(raw.replace(",", ""))
+        log(manager.log_box, f"📈 [추정예탁자산] {manager.estimated_asset:,} 원")
+
+        manager.update_ui()  # ← 반드시 여기 호출!
+
+
+

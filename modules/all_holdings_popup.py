@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHBoxLayout, QGridLayout, QGroupBox
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHBoxLayout, QGridLayout, QGroupBox, QHeaderView, QDesktopWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
@@ -6,7 +6,13 @@ class AllHoldingsPopup(QDialog):
     def __init__(self, holdings, basic_info_map, account_manager):
         super().__init__()
         self.setWindowTitle("📂 모든 계좌 잔고")
-        self.resize(1400, 700)
+
+        # 👉 창 크기 적당히 조정
+        self.setMinimumSize(800, 500)
+        self.resize(1000, 600)
+        # 또는 아래처럼 화면 크기 비율로 자동 조정 가능
+        # screen = QDesktopWidget().screenGeometry()
+        # self.resize(int(screen.width() * 0.7), int(screen.height() * 0.6))
 
         self.holdings = holdings
         self.basic_info_map = basic_info_map
@@ -30,6 +36,10 @@ class AllHoldingsPopup(QDialog):
                 "종목명", "수량", "매입가", "현재가", "수익률 (%)", "매입금액", "평가금액"
             ])
             table.setSortingEnabled(True)
+
+            # 👉 헤더를 테이블에 꽉차게
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
             group_layout.addWidget(table)
             group_box.setLayout(group_layout)
             tables_layout.addWidget(group_box, i // 2, i % 2)

@@ -5,20 +5,20 @@ class ConditionManager:
 
     def load_condition_list(self):
         cond_list_str = self.api.ocx.dynamicCall("GetConditionNameList()")
-        self.log(f"📥 [Raw 조건식 문자열] {cond_list_str}")
 
         if not cond_list_str:
-            self.log("⚠️ 조건식 목록이 비어 있습니다. 조건식을 먼저 생성하거나 로그인 후 다시 시도하세요.")
+            self.log("⚠️ 조건식 없음 (로그인 필요 또는 조건식 미등록)")
             return []
 
         cond_list = []
         for item in cond_list_str.split(";"):
-            if ":" in item:
-                index, name = item.split(":", 1)
+            if "^" in item:  # ← 수정됨
+                index, name = item.split("^", 1)
                 cond_list.append((int(index), name.strip()))
 
-        self.log(f"✅ [조건식 목록 파싱 완료] {cond_list}")
+        self.log(f"✅ 조건식 {len(cond_list)}개 로드됨")  # ✅ 심플 로그
         return cond_list
+
     
     def request_condition(self, screen_no, condition_name, condition_index, real_time=True):
         flag = 1 if real_time else 0

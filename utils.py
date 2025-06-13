@@ -3,7 +3,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
 
 # ⚙️ 전역 설정값
-SHOW_DEBUG = False
+# SHOW_DEBUG = False
+SHOW_DEBUG = True
 SHOW_VERBOSE_BUY_EVAL = False
 SHOW_VERBOSE_SELL_EVAL = False
 

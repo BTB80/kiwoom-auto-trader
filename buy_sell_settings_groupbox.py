@@ -29,15 +29,11 @@ def create_buy_settings_groupbox():
     one_unit_checkbox.setCheckable(True)
     one_unit_checkbox.setObjectName("buy_test_mode_checkbox")
 
-    condition_auto_buy_btn = QPushButton("조건검색 자동매수")
-    condition_auto_buy_btn.setCheckable(True)
-    condition_auto_buy_btn.setObjectName("condition_auto_buy_checkbox")  # ✅
-
     top_row = QHBoxLayout()
     top_row.addWidget(QLabel("매수종류"))
     top_row.addWidget(order_type_combo)
     top_row.addWidget(one_unit_checkbox)
-    top_row.addWidget(condition_auto_buy_btn)
+
 
     layout.addLayout(top_row, 0, 0, 1, 5)  # 하나의 줄로 5칸 차지
 
@@ -68,13 +64,6 @@ def create_buy_settings_groupbox():
 
     container.setLayout(layout)
     return container
-
-def format_with_commas(line_edit, text):
-    clean_text = text.replace(",", "")
-    if clean_text.isdigit():
-        line_edit.blockSignals(True)
-        line_edit.setText(f"{int(clean_text):,}")
-        line_edit.blockSignals(False)
 
 def create_sell_settings_groupbox():
     container = QWidget()
@@ -115,5 +104,5 @@ def create_sell_settings_groupbox():
     return container
 
 def register_chejan_handler(api, handler):
-    api.ocx.OnReceiveChejanData.connect(handler)
+    api.ocx.OnReceiveChejanData.connect(handler)  # ✅ 올바른 시그널 이름
     print("✅ 체결 이벤트 핸들러 연결 완료")
