@@ -337,7 +337,7 @@ class AutoTradeExecutor:
                 if hasattr(self.manager, 'current_account'):
                     self.manager.current_account = account_no
                 if hasattr(self.manager, 'request_holdings'):
-                    self.manager.request_holdings(account_no)
+                    # self.manager.request_holdings(account_no)
                     QTimer.singleShot(2000, lambda: self.manager.request_holdings(account_no))
 
             if code in self.sell_history:
@@ -387,7 +387,7 @@ class AutoTradeExecutor:
             if hasattr(self.manager, 'current_account'):
                 self.manager.current_account = account_no
             if hasattr(self.manager, 'request_holdings'):
-                self.manager.request_holdings(account_no)
+                # self.manager.request_holdings(account_no)
                 QTimer.singleShot(2000, lambda: self.manager.request_holdings(account_no))
 
             if hasattr(self.manager, "ui") and hasattr(self.manager.ui, "account_combo"):

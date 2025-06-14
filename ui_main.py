@@ -531,10 +531,15 @@ class AutoTradeUI(QMainWindow):
         is_same_account = account == self.manager.current_account
         self.current_account = account
         self.manager.current_account = account  # ✅ 상태 동기화
-        self.manager.request_deposit_info(account)  # 예수금 조회
+
+        self.manager.request_deposit_info(account)
         self.manager.request_estimated_asset(account)
-        self.manager.request_holdings(account)      # 잔고 요청
-        self.manager.request_today_profit(account)  # ✅ 항상 요청
+
+        # ✅ 중복 요청 방지: 동일 계좌 + 잔고 이미 로드된 경우 생략
+        if not is_same_account or not self.manager.holdings_loaded:
+            self.manager.request_holdings(account)
+
+        self.manager.request_today_profit(account)
         self.manager.request_order_history(account)
 
         if not is_same_account:
@@ -548,6 +553,7 @@ class AutoTradeUI(QMainWindow):
             else:
                 self.account_buttons[i].setChecked(False)
                 self.account_buttons[i].setStyleSheet(UNSELECTED_STYLE)
+
 
     @pyqtSlot()
     def start_realtime_updates(self):
@@ -587,15 +593,18 @@ class AutoTradeUI(QMainWindow):
                 first_account = accounts[0]
                 self.first_account = first_account
                 self.account_combo.setCurrentText(first_account)
-                self.handle_account_selected(first_account)
-                self.manager.request_today_profit(first_account)
-                self.manager.request_estimated_asset(first_account)
 
-            # ✅ 모든 계좌 잔고 요청 → 완료 시 매매 시작 버튼 활성화
-            self.manager.request_all_holdings(
-                accounts,
-                on_complete=self.on_holdings_loaded
-            )
+                # ✅ 잔고 수신 완료 후 계좌 선택 및 기타 요청 실행
+                def after_holdings_loaded():
+                    self.on_holdings_loaded()
+                    self.handle_account_selected(first_account)
+                    self.manager.request_today_profit(first_account)
+                    self.manager.request_estimated_asset(first_account)
+
+                self.manager.request_all_holdings(
+                    accounts,
+                    on_complete=after_holdings_loaded
+                )
 
             # ✅ 기본 전략 자동 로드
             if self.strategy_dropdown and self.strategy_dropdown.findText("기본") != -1:
@@ -607,6 +616,7 @@ class AutoTradeUI(QMainWindow):
 
         else:
             log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
+
             
     def on_login_complete(self):
                 self.trade_start_button.setEnabled(False)  # 🔒 먼저 비활성화
