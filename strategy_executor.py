@@ -303,13 +303,11 @@ class AutoTradeExecutor:
         if SHOW_DEBUG:
             log_debug(None, f"[🧪 체결 판별] status={order_status}, qty={filled_qty}, order_type={order_type_str}, price={price_str}, code={code}, acc={account_no}")
 
-        print(f"[🧪 Chejan DEBUG] order_type_str={order_type_str}, status={order_status}, qty={filled_qty}")
-
-        if order_status != "체결" or not filled_qty.isdigit():
+        if not order_type_str or order_status != "체결" or not filled_qty.isdigit():
             return
 
         qty = int(filled_qty)
-        price = int(price_str or 0)
+        price = int(price_str or "0")
 
         now = datetime.now()
         date = now.strftime("%Y-%m-%d")
@@ -326,7 +324,8 @@ class AutoTradeExecutor:
             log_info(None, f"[🟢 매수 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
             write_trade_log_file(f"[🟢 매수 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
 
-            self.pending_buys.discard((code, account_no))
+            if hasattr(self, "pending_buys"):
+                self.pending_buys.discard((code, account_no))
 
             account_holdings = self.holdings.setdefault(code, {})
             if account_no in account_holdings:
@@ -338,17 +337,14 @@ class AutoTradeExecutor:
             else:
                 account_holdings[account_no] = {"buy_price": price, "qty": qty}
 
-            # ✅ buy_history 갱신
             if hasattr(self, "reconstruct_buy_history_from_holdings"):
                 self.reconstruct_buy_history_from_holdings()
                 self.reconstruct_sell_history_from_holdings()
 
             if hasattr(self, "manager"):
                 self.manager.holdings = self.holdings
-                if hasattr(self.manager, 'current_account'):
-                    self.manager.current_account = account_no
+                self.manager.current_account = account_no
                 if hasattr(self.manager, 'request_holdings'):
-                    # self.manager.request_holdings(account_no)
                     QTimer.singleShot(2000, lambda: self.manager.request_holdings(account_no))
 
             if code in self.sell_history:
@@ -370,11 +366,9 @@ class AutoTradeExecutor:
             send_telegram_message(msg)
 
         elif any(k in order_type_str for k in ["매도", "현금매도", "신용매도"]):
-            print(f"📍 매도 블록 진입: {code} | 계좌: {account_no}")
             log_info(None, f"[🔴 매도 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
             write_trade_log_file(f"[🔴 매도 체결] {code} | 계좌: {account_no} | 수량: {qty} | 가격: {price}")
 
-            # ✅ holdings 정리
             holdings_targets = [self.holdings]
             if hasattr(self.manager, 'holdings'):
                 holdings_targets.append(self.manager.holdings)
@@ -389,24 +383,18 @@ class AutoTradeExecutor:
                         if not h[code]:
                             del h[code]
 
-            # ✅ sell_history 반영
             self.sell_history[code] = {"price": price, "time": now}
             self.buy_history.pop(code, None)
 
             if hasattr(self.manager, 'request_today_profit'):
                 self.manager.request_today_profit(account_no)
-            if hasattr(self.manager, 'current_account'):
-                self.manager.current_account = account_no
             if hasattr(self.manager, 'request_holdings'):
-                # self.manager.request_holdings(account_no)
                 QTimer.singleShot(2000, lambda: self.manager.request_holdings(account_no))
-
             if hasattr(self.manager, "ui") and hasattr(self.manager.ui, "account_combo"):
                 combo = self.manager.ui.account_combo
                 idx = combo.findText(account_no)
                 if idx != -1:
                     combo.setCurrentIndex(idx)
-
             if hasattr(self.manager, 'refresh_holdings_ui'):
                 QTimer.singleShot(500, self.manager.refresh_holdings_ui)
                 QTimer.singleShot(1500, self.manager.refresh_holdings_ui)
@@ -438,6 +426,7 @@ class AutoTradeExecutor:
             QTimer.singleShot(1500, self.manager.refresh_holdings_ui)
         if hasattr(self.manager, 'update_ui'):
             QTimer.singleShot(1600, self.manager.update_ui)
+
 
 
     def reconstruct_buy_history_from_holdings(self):

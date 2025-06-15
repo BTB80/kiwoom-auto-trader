@@ -286,10 +286,10 @@ class AccountManager:
         if SHOW_DEBUG:
             log_debug(self.log_box, f"[DEBUG] AccountManager.handle_tr_data() 진입 → rq_name: {rq_name}")
 
+        # ✅ 기본 계좌 관련 TR 처리
         if rq_name in (TR_DEPOSIT_INFO, TR_HOLDINGS_INFO, TR_TODAY_PROFIT, TR_ORDER_HISTORY, TR_ESTIMATED_ASSET):
             result = handle_account_tr_data(self, scr_no, rq_name, tr_code, record_name, prev_next)
 
-            # ✅ 보유종목 TR 수신 완료 계좌 추적
             if rq_name == TR_HOLDINGS_INFO and prev_next == "0":
                 if hasattr(self, "pending_accounts"):
                     self.pending_accounts.discard(self.current_account)
@@ -302,11 +302,13 @@ class AccountManager:
 
             return result
 
+        # ✅ 관심종목 보완 TR
         elif rq_name.startswith("보완TR_") or rq_name.startswith("재요청TR_"):
             from modules.tr_handler import handle_watchlist_tr_data
             handle_watchlist_tr_data(self.api, self.stock_search_table, self.basic_info_map, rq_name, tr_code)
             return
 
+        # ✅ 조건검색 종목 처리
         elif rq_name.startswith("조건식_TR_") or rq_name.startswith("조건재요청_TR_"):
             code = rq_name.split("_")[-1]
             name = self.api.get_master_code_name(code)
@@ -321,7 +323,6 @@ class AccountManager:
 
             rate = ((curr - prev) / prev * 100) if prev else 0.0
 
-            # ✅ 기본정보 저장
             self.basic_info_map[code] = {
                 "name": name,
                 "price": curr,
@@ -332,13 +333,11 @@ class AccountManager:
             if hasattr(self, "ui"):
                 ui = self.ui
 
-                # ✅ 재시도 큐에서 제거
                 if hasattr(ui, "condition_retry_queue") and code in ui.condition_retry_queue:
                     ui.condition_retry_queue.remove(code)
 
                 ui.condition_result_data.append([code, name, prev, curr, rate, ui.current_condition_name])
 
-                # ✅ 조건검색 자동매수 → 하락률 무시하고 즉시 강제매수 + 로그 표시
                 if ui.condition_auto_buy_checkbox.isChecked() and hasattr(self, "executor"):
                     buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
                     amount = buy_conf.get("amount", 0)
@@ -351,8 +350,17 @@ class AccountManager:
 
                 QTimer.singleShot(300, ui.fetch_next_condition_stock)
 
+            return
+
+        # ✅ 매수/매도 요청 후 응답 처리 (현재는 단순 로그만)
+        elif rq_name in ("매수", "매도"):
+            log(self.log_box, f"✅ 주문 요청 응답 수신 → rq_name: {rq_name} (체결은 chejan_data에서 처리)")
+            return
+
+        # ⚠️ 그 외 rq_name 무시
         if SHOW_DEBUG:
             log_debug(self.log_box, f"[⚠️ 무시됨] AccountManager.handle_tr_data(): rq_name={rq_name} 은 처리 대상 아님")
+
 
 
 
