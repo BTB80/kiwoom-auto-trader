@@ -141,11 +141,18 @@ class AutoTradeExecutor:
         account = self.get_account_by_step(step)
         is_test = self.buy_settings.get("test_mode", False)
 
-        # ✅ 항상 지정가로 고정
-        order_type = 1  # 1: 지정가
-        hoga_type = "00"  # 지정가 호가코드
+        # ✅ 전략에서 주문 방식 가져오기
+        order_type_ui = self.buy_settings.get("order_type", "지정가")
+        if order_type_ui == "시장가":
+            order_type = 2
+            hoga_type = "03"
+            price = 0  # 시장가 주문은 가격 0
+        else:
+            order_type = 1
+            hoga_type = "00"
+            price = int(current_price)
+
         qty = 1 if is_test else max(int(float(amount) // float(current_price)), 1)
-        price = int(current_price)
 
         res = self.api.send_order(
             rqname="매수",
@@ -160,10 +167,9 @@ class AutoTradeExecutor:
         )
 
         if SHOW_DEBUG:
-            log_debug(None, f"📤 매수주문 전송 → 계좌:{account} | 종목:{code} | 수량:{qty} | 유형:지정가 | "
+            log_debug(None, f"📤 매수주문 전송 → 계좌:{account} | 종목:{code} | 수량:{qty} | 유형:{order_type_ui} | "
                             f"{'테스트모드' if is_test else '실매매'} | 가격:{price} | 결과:{res}")
 
-        # ✅ 매수 후 잔고 갱신 요청
         if hasattr(self, "account_manager"):
             if SHOW_DEBUG:
                 log_debug(None, f"🔄 매수 후 잔고 갱신 요청 → 계좌: {account}")
@@ -234,16 +240,21 @@ class AutoTradeExecutor:
         if SHOW_DEBUG:
             log_debug(None, f"📍 send_sell_order 호출됨: {code}, 계좌={account}, 현재가={current_price}")
 
-        # ✅ 무조건 지정가 + 무조건 신규매도
-        order_type_ui = "지정가"
-        order_type = 2
-        hoga_type = "00"
+        # ✅ 전략에서 주문 방식 가져오기
+        order_type_ui = self.sell_settings.get("order_type", "지정가")
+        if order_type_ui == "시장가":
+            order_type = 2
+            hoga_type = "03"
+            price = 0  # 시장가 주문은 가격 0
+        else:
+            order_type = 2
+            hoga_type = "00"
+            price = int(current_price)
 
         holding_info = self.holdings.get(code, {}).get(account, {})
         total_qty = holding_info.get("qty", 0)
 
         qty = max(int(float(total_qty) * float(ratio) / 100), 1)
-        price = int(current_price)
 
         if SHOW_DEBUG:
             log_debug(None, f"🧾 매도 준비: 계좌={account}, 총보유={total_qty}, 매도비율={ratio}%, 수량={qty}, 가격={price}")
@@ -263,11 +274,11 @@ class AutoTradeExecutor:
         if SHOW_DEBUG:
             log_debug(None, f"📤 매도주문 전송됨 → 계좌:{account} | 종목:{code} | 수량:{qty} | 유형:{order_type_ui} | 가격:{price} | 결과:{res}")
 
-        # ✅ 매도 후 잔고 갱신 요청
         if hasattr(self, "account_manager"):
             if SHOW_DEBUG:
                 log_debug(None, f"🔄 매도 후 잔고 갱신 요청 → 계좌: {account}")
             self.account_manager.request_holdings(account)
+
 
 
     def handle_chejan_data(self, gubun, item_cnt, fid_list):
