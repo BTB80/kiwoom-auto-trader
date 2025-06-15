@@ -320,7 +320,8 @@ class AutoTradeUI(QMainWindow):
 
         # ✅ 조건검색 결과 시그널 연결
         self.api.ocx.OnReceiveTrCondition.connect(self.on_receive_tr_condition)
-
+        self.api.ocx.OnReceiveRealCondition.connect(self.on_receive_real_condition)
+        
         # ✅ 로그 기록 위젯 지정
         log_trade.log_widget = self.log_box
         
@@ -1238,7 +1239,39 @@ class AutoTradeUI(QMainWindow):
 
                 break  # ✅ 구간 1개만 실행 후 종료
 
+    def on_receive_real_condition(self, screen_no, code, event_type, condition_name):
+        if event_type != "I":
+            return
 
+        if not self.condition_auto_buy_checkbox.isChecked():
+            return
+
+        # 종목 정보 확보
+        name = self.api.get_master_code_name(code)
+        price = self.api.get_master_last_price(code)
+
+        # 계좌1 설정 확인
+        step = 1
+        account = self.executor.get_account_by_step(step)
+        buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
+        amount = buy_conf.get("amount", 0)
+        enabled = buy_conf.get("enabled", False)
+
+        if not enabled or amount <= 0:
+            return
+
+        # 중복 매수 방지
+        if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
+            log(self.log_box, f"[조건매수 스킵] {code}: 이미 계좌1에서 보유 중")
+            return
+        if (code, account) in self.executor.pending_buys:
+            log(self.log_box, f"[조건매수 스킵] {code}: 체결 대기 중")
+            return
+
+        # 매수 실행
+        log(self.log_box, f"[조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
+        self.executor.send_buy_order(code, amount, step=step, current_price=price)
+        self.executor.pending_buys.add((code, account))
 
             
 
