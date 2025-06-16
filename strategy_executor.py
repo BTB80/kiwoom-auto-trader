@@ -61,8 +61,9 @@ class AutoTradeExecutor:
         if code.startswith("A"):
             code = code[1:]
 
+        # holdings가 비었으면 종료
         if not self.holdings:
-            log_debug(None, f"[🛑 holdings 비어있음] {code} → 매수 평가 생략")
+            self.log_once(f"[🛑 holdings 비어있음] {code} → 매수 평가 생략")
             return
 
         accounts = self.buy_settings.get("accounts", {})
@@ -75,18 +76,21 @@ class AutoTradeExecutor:
             if not acc_conf or not acc_conf.get("enabled"):
                 continue
 
-            # ✅ 이미 보유 중이면 매수 금지
+            # ✅ 이미 보유 중이면 생략
             if self.holdings.get(code, {}).get(account_no, {}).get("qty", 0) > 0:
-                log_debug(None, f"[⛔ 중복보유] {code}는 계좌 {account_no}에서 이미 보유 중 → 생략")
+                self.log_once(f"[⛔ 중복보유] {code}는 계좌 {account_no}에서 이미 보유 중 → 생략")
                 continue
 
-            # ✅ 체결 대기 중이면 생략
+            # ✅ 이미 pending 상태면 생략
             if (code, account_no) in self.pending_buys:
-                log_debug(None, f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
+                self.log_once(f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
                 continue
+
+            # ✅ 조건 체크 전 pending_buys 선등록 (중복 방지 강화)
+            self.pending_buys.add((code, account_no))
 
             if step == 1:
-                # ✅ 계좌1: 보유 종목 수 제한 + 매도 기록이 있으면 재매수 금지
+                # ✅ 계좌1: 종목 수 제한 및 재매수 제한
                 max_holdings = 10
                 if hasattr(self, "manager") and hasattr(self.manager, "ui"):
                     try:
@@ -99,42 +103,46 @@ class AutoTradeExecutor:
                     if acc_map.get(account_no, {}).get("qty", 0) > 0
                 ]
                 if len(current_holdings) >= max_holdings:
-                    log_debug(None, f"[⛔ 계좌1 종목수 제한] {len(current_holdings)}개 보유 중 → 생략")
+                    self.log_once(f"[⛔ 계좌1 종목수 제한] {len(current_holdings)}개 보유 중 → 생략")
+                    self.pending_buys.discard((code, account_no))
                     continue
 
                 if code in self.sell_history:
-                    log_debug(None, f"[⏸ 계좌1 재매수 제한] {code} / 매도 이력 있음 → 생략")
+                    self.log_once(f"[⏸ 계좌1 재매수 제한] {code} / 매도 이력 있음 → 생략")
+                    self.pending_buys.discard((code, account_no))
                     continue
 
                 base_price = self.get_previous_close(code)
 
             else:
-                # ✅ 계좌2~4: 전단계 계좌가 보유 중이면 매도 이력 상관없이 평가
+                # ✅ 계좌2~4: 전 계좌 보유 여부 확인
                 prev_account = self.get_account_by_step(step - 1)
                 prev_holding = self.holdings.get(code, {}).get(prev_account)
 
                 if prev_holding and prev_holding.get("qty", 0) > 0:
                     base_price = prev_holding.get("buy_price", current_price)
-                    log_debug(None, f"[✅ 계좌{step} 조건충족] 전계좌({prev_account}) 보유 중 → 기준가={base_price}")
+                    self.log_once(f"[✅ 계좌{step} 조건충족] 전계좌({prev_account}) 보유 중 → 기준가={base_price}")
                 else:
-                    log_debug(None, f"[⛔ 계좌{step} 조건불충족] 전계좌({prev_account}) 미보유 → 평가 생략")
+                    self.log_once(f"[⛔ 계좌{step} 조건불충족] 전계좌({prev_account}) 미보유 → 평가 생략")
+                    self.pending_buys.discard((code, account_no))
                     continue
 
-            # 🎯 drop 조건 비교
+            # 🎯 가격 조건 비교
             drop_rate = acc_conf.get("drop_rate", 0)
             target_price = base_price * (1 + drop_rate / 100)
 
             if SHOW_VERBOSE_BUY_EVAL:
-                log_debug(None, f"[⚙️ 평가] {code} | step={step} | 계좌={account_no} | 현재가={current_price} | 기준가={base_price} | 목표가={target_price:.2f}")
+                self.log_once(f"[⚙️ 평가] {code} | step={step} | 계좌={account_no} | 현재가={current_price} | 기준가={base_price} | 목표가={target_price:.2f}")
 
             if current_price <= target_price:
                 amount = acc_conf.get("amount", 0)
                 log_info(None, f"[✅ 매수 조건 만족] {code} / 계좌={account_no} / 금액: {amount}")
                 self.send_buy_order(code, amount, step, current_price)
-                self.pending_buys.add((code, account_no))
             else:
-                if SHOW_VERBOSE_BUY_EVAL:
-                    log_debug(None, f"[❌ 조건 미충족] {code} / 현재가={current_price} > 목표가={target_price:.2f}")
+                self.log_once(f"[❌ 조건 미충족] {code} / 현재가={current_price} > 목표가={target_price:.2f}")
+                self.pending_buys.discard((code, account_no))  # 조건 불충족 → 제거
+
+
 
 
     def send_buy_order(self, code, amount, step, current_price):
@@ -190,14 +198,14 @@ class AutoTradeExecutor:
             log_debug(None, f"[👁 매도평가 진입] {code} / 현재가: {current_price}")
 
         if code not in self.holdings:
-            log_debug(None, f"[❌ 보유정보 없음] {code}")
+            self.log_once(f"[❌ 보유정보 없음] {code}")
             return
 
         for i, account in enumerate(self.accounts):
             # print(f" - 계좌 검사: {account} / 보유 여부: {account in self.holdings.get(code, {})}")
             holding = self.holdings[code].get(account)
             if not holding:
-                log_debug(None, f"[⛔ 해당 계좌 보유 없음] {code} / 계좌: {account}")
+                self.log_once(f"[⛔ 해당 계좌 보유 없음] {code} / 계좌: {account}")
                 continue
 
             step = i + 1
@@ -298,7 +306,15 @@ class AutoTradeExecutor:
         filled_qty = self.api.ocx.dynamicCall("GetChejanData(int)", 911).strip()
         price_str = self.api.ocx.dynamicCall("GetChejanData(int)", 910).strip().replace(",", "")
         account_no = self.api.ocx.dynamicCall("GetChejanData(int)", 9201).strip()
-        order_type_str = self.api.ocx.dynamicCall("GetChejanData(int)", 920).strip()
+        order_type_code = self.api.ocx.dynamicCall("GetChejanData(int)", 907).strip()
+        order_type_str = {
+            "1": "매도",
+            "2": "매수",
+            "3": "취소",
+            "4": "정정",
+            # 필요하면 더 추가
+        }.get(order_type_code, order_type_code)
+
 
         if SHOW_DEBUG:
             log_debug(None, f"[🧪 체결 판별] status={order_status}, qty={filled_qty}, order_type={order_type_str}, price={price_str}, code={code}, acc={account_no}")
@@ -378,7 +394,9 @@ class AutoTradeExecutor:
                     prev_qty = h[code][account_no].get("qty", 0)
                     new_qty = max(0, prev_qty - qty)
                     h[code][account_no]["qty"] = new_qty
+                    log_debug(None, f"[📉 매도 후 잔고 수정] {code} / 계좌: {account_no} / 잔여수량: {new_qty}")
                     if new_qty == 0:
+                        log_debug(None, f"[🧹 잔고에서 제거됨] {code} / 계좌: {account_no}")
                         del h[code][account_no]
                         if not h[code]:
                             del h[code]
@@ -543,3 +561,10 @@ class AutoTradeExecutor:
                 qty = info.get("qty", 0)
                 price = info.get("buy_price", 0)
                 print(f"  └ 계좌: {acc} | 수량: {qty} | 단가: {price}")
+                
+    def log_once(self, message: str):
+        if not hasattr(self, "_logged_messages"):
+            self._logged_messages = set()
+        if message not in self._logged_messages:
+            self._logged_messages.add(message)
+            log_debug(None, message)

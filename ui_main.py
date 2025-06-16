@@ -31,7 +31,7 @@ from buy_sell_settings_groupbox import create_buy_settings_groupbox, create_sell
 # from strategy_selector_widget import create_strategy_selector_widget
 from strategy_manager import delete_strategy
 from strategy_executor import AutoTradeExecutor
-from buy_sell_settings_groupbox import register_chejan_handler
+# from buy_sell_settings_groupbox import register_chejan_handler
 from PyQt5.QtCore import QTimer
 from modules.all_holdings_popup import AllHoldingsPopup
 from utils import log_trade
@@ -232,6 +232,7 @@ class AutoTradeUI(QMainWindow):
         self.load_existing_strategies()
 
         self.condition_auto_buy_checkbox = self.findChild(QPushButton, "condition_auto_buy_checkbox")
+        self.condition_auto_buy_checkbox.setCheckable(True)
         self.condition_auto_buy_checkbox.toggled.connect(self.toggle_condition_auto_buy)
         self.schedule_dropdown_main = self.findChild(QComboBox, "schedule_dropdown_main")
         
