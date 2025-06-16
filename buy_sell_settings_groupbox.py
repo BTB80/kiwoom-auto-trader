@@ -102,7 +102,3 @@ def create_sell_settings_groupbox():
 
     container.setLayout(layout)
     return container
-
-# def register_chejan_handler(api, handler):
-#     api.ocx.OnReceiveChejanData.connect(handler)  # ✅ 올바른 시그널 이름
-#     print("✅ 체결 이벤트 핸들러 연결 완료")

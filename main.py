@@ -2,11 +2,14 @@ from PyQt5.QtWidgets import QApplication,QSizePolicy
 from PyQt5.QtCore import Qt
 import sys
 from ui_main import AutoTradeUI
+from utils import update_debug_flags
+from config_manager import load_user_config
+
 
 if __name__ == "__main__":
     # 고해상도 디스플레이 대응
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-
+    update_debug_flags(load_user_config())
     app = QApplication(sys.argv)
     window = AutoTradeUI()
 

@@ -1,13 +1,22 @@
 from datetime import datetime
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
+from config_manager import load_user_config
 import os
 # ⚙️ 전역 설정값
-# SHOW_DEBUG = False
-SHOW_DEBUG = True
+SHOW_DEBUG = False
 SHOW_VERBOSE_BUY_EVAL = False
 SHOW_VERBOSE_SELL_EVAL = False
 
+def update_debug_flags(config):
+    global SHOW_DEBUG, SHOW_VERBOSE_BUY_EVAL, SHOW_VERBOSE_SELL_EVAL
+    SHOW_DEBUG = config.get("show_debug", False)
+    SHOW_VERBOSE_BUY_EVAL = config.get("show_verbose_buy", False)
+    SHOW_VERBOSE_SELL_EVAL = config.get("show_verbose_sell", False)
+# user_config = load_user_config()
+# SHOW_DEBUG = user_config.get("show_debug", False)
+# SHOW_VERBOSE_BUY_EVAL = user_config.get("show_verbose_buy", False)
+# SHOW_VERBOSE_SELL_EVAL = user_config.get("show_verbose_sell", False)
 # ✅ 디버깅 로그
 def log_debug(log_box, message):
     if SHOW_DEBUG:

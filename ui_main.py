@@ -14,6 +14,7 @@ from config_manager import save_user_config, load_user_config
 from schedule_settings_dialog import ScheduleSettingsDialog
 from PyQt5.QtWidgets import QMessageBox
 import datetime
+from utils import update_debug_flags
 from PyQt5.QtCore import Qt
 from kiwoom_api import KiwoomAPI
 from strategy_manager import save_current_strategy
@@ -294,6 +295,7 @@ class AutoTradeUI(QMainWindow):
         self.stock_search_table.setEditTriggers(QTableWidget.NoEditTriggers)
         
         self.config = load_user_config()
+        update_debug_flags(self.config) 
         # ✅ 이 부분이 핵심입니다!
         self.sheet_id = self.config.get("sheet_id", "")
         self.sheet_name = self.config.get("sheet_name", "관심종목")
@@ -1309,26 +1311,51 @@ class AutoTradeUI(QMainWindow):
         self.executor.send_buy_order(code, amount, step=step, current_price=price)
         self.executor.pending_buys.add((code, account))
 
-            
-
     def open_schedule_settings(self):
         strategy_list = [self.strategy_dropdown.itemText(i) for i in range(self.strategy_dropdown.count())]
         condition_list = [self.condition_dropdown.itemText(i) for i in range(self.condition_dropdown.count())]
 
-        # ✅ 이전 스케줄 데이터 전달
         dialog = ScheduleSettingsDialog(strategy_list, condition_list, self.schedule_config if hasattr(self, "schedule_config") else None, self)
+
+        current_schedule_name = self.schedule_dropdown_main.currentText()
+        if current_schedule_name:
+            dialog.set_selected_schedule(current_schedule_name)
 
         if dialog.exec_() == QDialog.Accepted:
             self.schedule_config = dialog.get_schedule_data()
-
-            # ✅ 저장된 이름 적용
             if hasattr(dialog, "last_saved_name") and dialog.last_saved_name:
                 name = dialog.last_saved_name
                 self.refresh_schedule_dropdown_main(selected_name=name)
-                log(self.log_box, f"✅ 스케줄 '{name}' 설정이 적용됨")
+
+                # ✅ 스케줄 적용 토글 여부에 따라 로그 분리
+                if hasattr(self, "schedule_enabled_button") and self.schedule_enabled_button.isChecked():
+                    log(self.log_box, f"✅ 스케줄 '{name}' 설정이 적용됨")
+                else:
+                    log(self.log_box, f"📥 스케줄 '{name}' 저장됨 (적용은 토글 ON 시)")
             else:
-                log(self.log_box, f"✅ 스케줄 설정이 적용됨")
-            
+                log(self.log_box, f"📥 스케줄 설정이 저장됨 (적용은 토글 ON 시)")
+
+
+    # def open_schedule_settings(self):
+    #     strategy_list = [self.strategy_dropdown.itemText(i) for i in range(self.strategy_dropdown.count())]
+    #     condition_list = [self.condition_dropdown.itemText(i) for i in range(self.condition_dropdown.count())]
+
+    #     dialog = ScheduleSettingsDialog(strategy_list, condition_list, self.schedule_config if hasattr(self, "schedule_config") else None, self)
+
+    #     current_schedule_name = self.schedule_dropdown_main.currentText()
+    #     if current_schedule_name:
+    #         dialog.set_selected_schedule(current_schedule_name)
+
+    #     if dialog.exec_() == QDialog.Accepted:
+    #         self.schedule_config = dialog.get_schedule_data()
+    #         if hasattr(dialog, "last_saved_name") and dialog.last_saved_name:
+    #             name = dialog.last_saved_name
+    #             self.refresh_schedule_dropdown_main(selected_name=name)
+    #             log(self.log_box, f"✅ 스케줄 '{name}' 설정이 적용됨")
+    #         else:
+    #             log(self.log_box, f"✅ 스케줄 설정이 적용됨")
+
+                
     def setup_menu_actions(self):
         self.actionOpenScheduleDialog = self.findChild(QAction, "actionOpenScheduleDialog")
         if self.actionOpenScheduleDialog:
@@ -1357,31 +1384,57 @@ class AutoTradeUI(QMainWindow):
 
         self.schedule_dropdown_main.blockSignals(False)
 
-
-
     def load_selected_schedule(self, name):
         path = f"schedules/{name}.json"
         if not os.path.exists(path):
             return
         with open(path, "r", encoding="utf-8") as f:
             config = json.load(f)
+
         self.schedule_config = config
-        log(self.log_box, f"✅ 스케줄 '{name}' 로드됨: {self.schedule_config}")
+
+        # ✔️ 적용 여부 판단해서 로그 분기
+        if getattr(self, "schedule_enabled_button", None) and self.schedule_enabled_button.isChecked():
+            log(self.log_box, f"✅ 스케줄 '{name}' 로드됨 및 적용 준비됨: {self.schedule_config}")
+        else:
+            log(self.log_box, f"📂 스케줄 '{name}' 불러옴 (적용은 스케줄 토글 ON 시 실행됨)")
+
+
+    # def load_selected_schedule(self, name):
+    #     path = f"schedules/{name}.json"
+    #     if not os.path.exists(path):
+    #         return
+    #     with open(path, "r", encoding="utf-8") as f:
+    #         config = json.load(f)
+    #     self.schedule_config = config
+    #     log(self.log_box, f"✅ 스케줄 '{name}' 로드됨: {self.schedule_config}")
+            
+    # def on_schedule_toggle(self, checked):
+    #     if checked:
+    #         name = self.schedule_dropdown_main.currentText()
+    #         self.load_selected_schedule(name)  # ✅ 먼저 설정을 불러오고
+    #         config = getattr(self, "schedule_config", None)
+    #         if config:
+    #             self.check_schedule_and_apply()  # ✅ 이제 적용 실행
+    #             log(self.log_box, f"✅ 스케줄 설정 적용됨: {config}")
+    #         else:
+    #             log(self.log_box, "⚠️ 선택한 스케줄을 찾을 수 없습니다.")
+    #     else:
+    #         log(self.log_box, "🛑 스케줄 적용 해제됨")
             
     def on_schedule_toggle(self, checked):
         if checked:
             name = self.schedule_dropdown_main.currentText()
-            self.load_selected_schedule(name)  # ✅ 먼저 설정을 불러오고
+            self.load_selected_schedule(name)
             config = getattr(self, "schedule_config", None)
             if config:
-                self.check_schedule_and_apply()  # ✅ 이제 적용 실행
-                log(self.log_box, f"✅ 스케줄 설정 적용됨: {config}")
+                self.check_schedule_and_apply()
+                log(self.log_box, f"✅ 스케줄 '{name}' 선택됨 → 자동매매에 적용 완료됨")
             else:
-                log(self.log_box, "⚠️ 선택한 스케줄을 찾을 수 없습니다.")
+                log(self.log_box, f"⚠️ 스케줄 '{name}'을 불러올 수 없습니다.")
         else:
             log(self.log_box, "🛑 스케줄 적용 해제됨")
-            
-            
+
     def toggle_condition_auto_buy(self, checked):
         if checked:
             log(self.log_box, "✅ 조건검색 자동매수 활성화됨")
@@ -1389,38 +1442,45 @@ class AutoTradeUI(QMainWindow):
             log(self.log_box, "🛑 조건검색 자동매수 비활성화됨")
 
     def open_config_dialog(self, first_time=False):
-            dialog = ConfigDialog(self.config, self)
-            if dialog.exec_() == QDialog.Accepted:
-                self.config = dialog.get_config()
-                save_user_config(self.config)
-                log(self.log_box, "✅ 설정 저장 완료")
+        dialog = ConfigDialog(self.config, self)
+        if dialog.exec_() != QDialog.Accepted:
+            return  # 사용자가 취소한 경우 아무 작업도 하지 않음
 
-                self.executor.set_accounts([
-                    self.config.get("account1", ""),
-                    self.config.get("account2", ""),
-                    self.config.get("account3", ""),
-                    self.config.get("account4", ""),
-                ])
+        self.config = dialog.get_config()
+        save_user_config(self.config)
+        update_debug_flags(self.config)
+        log(self.log_box, "✅ 설정 저장 완료")
 
-                if first_time:
-                    QMessageBox.information(self, "설정 완료", "✅ 설정이 완료되었습니다. 프로그램을 시작할 수 있습니다.")
-            # 텔레그램 설정 적용
-            token = self.config.get("telegram_token")
-            chat_id = self.config.get("telegram_chat_id")
-            if token and chat_id:
-                configure_telegram(token, chat_id)
-                log(self.log_box, "✅ 텔레그램 설정 적용 완료")
-            else:
-                log(self.log_box, "⚠️ 텔레그램 설정이 비어 있음")
-                
-            # 구글 시트 설정 적용
-            self.sheet_id = self.config.get("sheet_id")
-            self.sheet_name = self.config.get("sheet_name", "관심종목")  # 기본값 제공
+        self.executor.set_accounts([
+            self.config.get("account1", ""),
+            self.config.get("account2", ""),
+            self.config.get("account3", ""),
+            self.config.get("account4", ""),
+        ])
 
-            if self.sheet_id:
-                log(self.log_box, f"📄 구글 시트 설정 적용 완료 → ID: {self.sheet_id}, 이름: {self.sheet_name}")
-            else:
-                log(self.log_box, "⚠️ 구글 시트 ID가 설정되어 있지 않습니다.")
+        # 텔레그램 설정 적용
+        token = self.config.get("telegram_token")
+        chat_id = self.config.get("telegram_chat_id")
+        if token and chat_id:
+            configure_telegram(token, chat_id)
+            log(self.log_box, "✅ 텔레그램 설정 적용 완료")
+        else:
+            log(self.log_box, "⚠️ 텔레그램 설정이 비어 있음")
+
+        # 구글 시트 설정 적용
+        self.sheet_id = self.config.get("sheet_id")
+        self.sheet_name = self.config.get("sheet_name", "관심종목")  # 기본값 제공
+
+        if self.sheet_id:
+            log(self.log_box, f"📄 구글 시트 설정 적용 완료 → ID: {self.sheet_id}, 이름: {self.sheet_name}")
+        else:
+            log(self.log_box, "⚠️ 구글 시트 ID가 설정되어 있지 않습니다.")
+
+        if first_time:
+            QMessageBox.information(self, "설정 완료", "✅ 설정이 완료되었습니다. 프로그램을 시작할 수 있습니다.")
+        else:
+            QMessageBox.information(self, "설정 적용됨", "✅ 설정이 저장되었습니다.\n프로그램을 재시작하면 디버그 모드가 적용됩니다.")
+
 
 
             
