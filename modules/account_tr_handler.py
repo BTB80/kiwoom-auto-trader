@@ -69,14 +69,15 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
             manager.executor.holdings = {
                 code: {
                     acc: {
-                        "buy_price": info["buy"],
-                        "qty": info["qty"]
+                        "buy_price": info.get("buy", 0),
+                        "qty": info.get("qty", 0)
                     } for acc, info in acc_dict.items()
                 } for code, acc_dict in manager.holdings.items()
             }
             manager.executor.reconstruct_buy_history_from_holdings()
             manager.executor.reconstruct_sell_history_from_holdings()
             log(manager.log_box, "🔁 매수/매도 단계 자동 복원 완료")
+
 
         if hasattr(manager, "handle_holdings_response_complete"):
             manager.handle_holdings_response_complete(account)
