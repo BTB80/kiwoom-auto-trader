@@ -5,6 +5,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 
 def fetch_google_sheet_data(sheet_id, worksheet_name="관심종목"):
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials
+
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
@@ -12,8 +15,16 @@ def fetch_google_sheet_data(sheet_id, worksheet_name="관심종목"):
     creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(sheet_id)
-    worksheet = sheet.worksheet(worksheet_name)
+
+    try:
+        worksheet = sheet.worksheet(worksheet_name)
+    except Exception as e:
+        raise Exception(f"❌ 시트 이름 '{worksheet_name}'을 찾을 수 없습니다: {e}")
+
     rows = worksheet.get_all_values()
+
+    if not rows:
+        return []
 
     header, *data = rows
     stocks = []
@@ -24,3 +35,4 @@ def fetch_google_sheet_data(sheet_id, worksheet_name="관심종목"):
             tag = row[2].strip() if len(row) >= 3 else ""
             stocks.append((code, name, tag))
     return stocks
+

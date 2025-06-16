@@ -33,6 +33,7 @@ from strategy_manager import delete_strategy
 from strategy_executor import AutoTradeExecutor
 # from buy_sell_settings_groupbox import register_chejan_handler
 from PyQt5.QtCore import QTimer
+from modules.telegram_utils import configure_telegram
 from modules.all_holdings_popup import AllHoldingsPopup
 from utils import log_trade
 from utils import (
@@ -143,7 +144,8 @@ class AutoTradeUI(QMainWindow):
         super().__init__()
         uic.loadUi("ui/autotrade.ui", self)
 
-        self.config = load_user_config()
+        
+        
 
         # # 🔸 최초 실행 시 설정 없으면 설정창 강제 실행
         # if not self.config.get("account1"):
@@ -290,10 +292,23 @@ class AutoTradeUI(QMainWindow):
             ["종목코드", "종목명", "전일종가", "현재가", "등락률", "상태", "매수"]
         )
         self.stock_search_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        self.config = load_user_config()
+        # ✅ 이 부분이 핵심입니다!
+        self.sheet_id = self.config.get("sheet_id", "")
+        self.sheet_name = self.config.get("sheet_name", "관심종목")
 
+        # 텔레그램도 함께!
+        token = self.config.get("telegram_token", "")
+        chat_id = self.config.get("telegram_chat_id", "")
+        if token and chat_id:
+            configure_telegram(token, chat_id)
+            
         self.api = KiwoomAPI()
         self.basic_info_map = {}
-        self.manager = AccountManager(self.api)
+        # self.manager = AccountManager(self.api)
+        
+        self.manager = AccountManager(self.api, self.config)
         self.manager.ui = self
         
         self.executor = AutoTradeExecutor(self.api)
@@ -764,9 +779,17 @@ class AutoTradeUI(QMainWindow):
 
     def load_watchlist_from_google(self):
         try:
-            sheet_id = "1ebHJV_SOg50092IH88yNK5ecPgx_0UBWu5EybpBWuuU"
-            self.watchlist = fetch_google_sheet_data(sheet_id)
+            # ✅ 설정된 시트 ID와 이름 불러오기
+            sheet_id = getattr(self, "sheet_id", "")
+            sheet_name = getattr(self, "sheet_name", "관심종목")
+
+            if not sheet_id:
+                log(self.log_box, "❌ 구글 시트 ID가 설정되어 있지 않습니다.")
+                return
+
+            self.watchlist = fetch_google_sheet_data(sheet_id, sheet_name)
             display_watchlist(self.stock_search_table, self.watchlist, self.manual_buy_clicked)
+
             for stock in self.watchlist:
                 try:
                     code, name, tag = stock
@@ -774,13 +797,16 @@ class AutoTradeUI(QMainWindow):
                     code, name = stock
                     tag = ""
                 log(self.log_box, f"🔎 관심종목: {code} | {name} | {tag}")
+
             self.request_basic_info_for_watchlist()
             self.start_watchlist_realtime()
 
             if self.is_market_closed():
                 self.request_all_watchlist_prices_by_tr()
+
         except Exception as e:
             log(self.log_box, f"❌ 관심종목 불러오기 실패: {e}")
+
 
     def request_basic_info_for_watchlist(self):
         if not getattr(self, "watchlist", []):
@@ -1313,22 +1339,7 @@ class AutoTradeUI(QMainWindow):
             self.actionOpenConfigDialog.triggered.connect(self.open_config_dialog)
 
 
-    def open_config_dialog(self, first_time=False):
-        dialog = ConfigDialog(self.config, self)
-        if dialog.exec_() == QDialog.Accepted:
-            self.config = dialog.get_config()
-            save_user_config(self.config)
-            log(self.log_box, "✅ 설정 저장 완료")
-
-            self.executor.set_accounts([
-                self.config.get("account1", ""),
-                self.config.get("account2", ""),
-                self.config.get("account3", ""),
-                self.config.get("account4", ""),
-            ])
-
-            if first_time:
-                QMessageBox.information(self, "설정 완료", "✅ 설정이 완료되었습니다. 프로그램을 시작할 수 있습니다.")
+    
                 
     def refresh_schedule_dropdown_main(self, selected_name=None):
         if not hasattr(self, "schedule_dropdown_main"):
@@ -1376,6 +1387,40 @@ class AutoTradeUI(QMainWindow):
             log(self.log_box, "✅ 조건검색 자동매수 활성화됨")
         else:
             log(self.log_box, "🛑 조건검색 자동매수 비활성화됨")
+
+    def open_config_dialog(self, first_time=False):
+            dialog = ConfigDialog(self.config, self)
+            if dialog.exec_() == QDialog.Accepted:
+                self.config = dialog.get_config()
+                save_user_config(self.config)
+                log(self.log_box, "✅ 설정 저장 완료")
+
+                self.executor.set_accounts([
+                    self.config.get("account1", ""),
+                    self.config.get("account2", ""),
+                    self.config.get("account3", ""),
+                    self.config.get("account4", ""),
+                ])
+
+                if first_time:
+                    QMessageBox.information(self, "설정 완료", "✅ 설정이 완료되었습니다. 프로그램을 시작할 수 있습니다.")
+            # 텔레그램 설정 적용
+            token = self.config.get("telegram_token")
+            chat_id = self.config.get("telegram_chat_id")
+            if token and chat_id:
+                configure_telegram(token, chat_id)
+                log(self.log_box, "✅ 텔레그램 설정 적용 완료")
+            else:
+                log(self.log_box, "⚠️ 텔레그램 설정이 비어 있음")
+                
+            # 구글 시트 설정 적용
+            self.sheet_id = self.config.get("sheet_id")
+            self.sheet_name = self.config.get("sheet_name", "관심종목")  # 기본값 제공
+
+            if self.sheet_id:
+                log(self.log_box, f"📄 구글 시트 설정 적용 완료 → ID: {self.sheet_id}, 이름: {self.sheet_name}")
+            else:
+                log(self.log_box, "⚠️ 구글 시트 ID가 설정되어 있지 않습니다.")
 
 
             
