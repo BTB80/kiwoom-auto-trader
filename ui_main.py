@@ -214,7 +214,16 @@ class AutoTradeUI(QMainWindow):
         self.trade_start_button = self.findChild(QPushButton, "trade_start_button")
         self.trade_stop_button = self.findChild(QPushButton, "trade_stop_button")
         self.schedule_enabled_button = self.findChild(QPushButton, "schedule_enabled_button")
-        
+        self.schedule_button = self.findChild(QPushButton, "schedule_button")
+        if self.schedule_button:
+            self.schedule_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
+            self.schedule_button.clicked.connect(self.open_schedule_settings)
+
+        self.config_button = self.findChild(QPushButton, "config_button")
+        if self.config_button:
+            self.config_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
+            self.config_button.clicked.connect(lambda: self.open_config_dialog(first_time=False))
+
         for btn in [self.login_button, self.trade_start_button, self.trade_stop_button]:
             btn.setStyleSheet(UNIFORM_BUTTON_STYLE)
         
