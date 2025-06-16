@@ -13,10 +13,7 @@ def update_debug_flags(config):
     SHOW_DEBUG = config.get("show_debug", False)
     SHOW_VERBOSE_BUY_EVAL = config.get("show_verbose_buy", False)
     SHOW_VERBOSE_SELL_EVAL = config.get("show_verbose_sell", False)
-# user_config = load_user_config()
-# SHOW_DEBUG = user_config.get("show_debug", False)
-# SHOW_VERBOSE_BUY_EVAL = user_config.get("show_verbose_buy", False)
-# SHOW_VERBOSE_SELL_EVAL = user_config.get("show_verbose_sell", False)
+
 # ✅ 디버깅 로그
 def log_debug(log_box, message):
     if SHOW_DEBUG:

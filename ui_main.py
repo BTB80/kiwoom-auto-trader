@@ -1334,27 +1334,6 @@ class AutoTradeUI(QMainWindow):
                     log(self.log_box, f"📥 스케줄 '{name}' 저장됨 (적용은 토글 ON 시)")
             else:
                 log(self.log_box, f"📥 스케줄 설정이 저장됨 (적용은 토글 ON 시)")
-
-
-    # def open_schedule_settings(self):
-    #     strategy_list = [self.strategy_dropdown.itemText(i) for i in range(self.strategy_dropdown.count())]
-    #     condition_list = [self.condition_dropdown.itemText(i) for i in range(self.condition_dropdown.count())]
-
-    #     dialog = ScheduleSettingsDialog(strategy_list, condition_list, self.schedule_config if hasattr(self, "schedule_config") else None, self)
-
-    #     current_schedule_name = self.schedule_dropdown_main.currentText()
-    #     if current_schedule_name:
-    #         dialog.set_selected_schedule(current_schedule_name)
-
-    #     if dialog.exec_() == QDialog.Accepted:
-    #         self.schedule_config = dialog.get_schedule_data()
-    #         if hasattr(dialog, "last_saved_name") and dialog.last_saved_name:
-    #             name = dialog.last_saved_name
-    #             self.refresh_schedule_dropdown_main(selected_name=name)
-    #             log(self.log_box, f"✅ 스케줄 '{name}' 설정이 적용됨")
-    #         else:
-    #             log(self.log_box, f"✅ 스케줄 설정이 적용됨")
-
                 
     def setup_menu_actions(self):
         self.actionOpenScheduleDialog = self.findChild(QAction, "actionOpenScheduleDialog")
@@ -1400,27 +1379,6 @@ class AutoTradeUI(QMainWindow):
             log(self.log_box, f"📂 스케줄 '{name}' 불러옴 (적용은 스케줄 토글 ON 시 실행됨)")
 
 
-    # def load_selected_schedule(self, name):
-    #     path = f"schedules/{name}.json"
-    #     if not os.path.exists(path):
-    #         return
-    #     with open(path, "r", encoding="utf-8") as f:
-    #         config = json.load(f)
-    #     self.schedule_config = config
-    #     log(self.log_box, f"✅ 스케줄 '{name}' 로드됨: {self.schedule_config}")
-            
-    # def on_schedule_toggle(self, checked):
-    #     if checked:
-    #         name = self.schedule_dropdown_main.currentText()
-    #         self.load_selected_schedule(name)  # ✅ 먼저 설정을 불러오고
-    #         config = getattr(self, "schedule_config", None)
-    #         if config:
-    #             self.check_schedule_and_apply()  # ✅ 이제 적용 실행
-    #             log(self.log_box, f"✅ 스케줄 설정 적용됨: {config}")
-    #         else:
-    #             log(self.log_box, "⚠️ 선택한 스케줄을 찾을 수 없습니다.")
-    #     else:
-    #         log(self.log_box, "🛑 스케줄 적용 해제됨")
             
     def on_schedule_toggle(self, checked):
         if checked:
