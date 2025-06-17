@@ -182,7 +182,7 @@
           <item>
            <layout class="QHBoxLayout">
             <item><widget class="QComboBox" name="condition_dropdown"/></item>
-            <item><widget class="QPushButton" name="condition_search_button"><property name="text"><string>조건실행</string></property></widget></item>
+            <item><widget class="QPushButton" name="condition_search_button"><property name="text"><string>검색</string></property></widget></item>
            </layout>
           </item>
           <item><widget class="QTableWidget" name="condition_table"/></item>
