@@ -61,39 +61,10 @@ class AccountManager:
         self.holdings_table = table
         self.log_box = log_box
         self.unsettled_table = unsettled_table
+        
     def set_executor(self, executor):
         self.executor = executor
-    # def handle_login_event(self, err_code):
-    #     if err_code == 0:
-    #         log(self.log_box, "✅ 로그인 성공")
-
-    #         acc_list = self.api.ocx.dynamicCall("GetLoginInfo(QString)", "ACCNO")
-    #         accounts = acc_list.strip().split(";")[:-1]
-    #         allowed = {"6175305510", "6175309310", "6418715110", "6418715410"}
-    #         filtered = [acc for acc in accounts if acc in allowed]
-
-    #         if SHOW_DEBUG:
-    #             log_debug(self.log_box, f"[로그인 처리] 전체 계좌 목록: {accounts}")
-    #             log_debug(self.log_box, f"[로그인 처리] 허용된 계좌 필터링 결과: {filtered}")
-
-    #         self.account_combo.blockSignals(True)
-    #         self.account_combo.clear()
-    #         self.account_combo.addItems(filtered)
-    #         self.account_combo.blockSignals(False)
-
-    #         self.accounts = filtered
-
-    #         if filtered and hasattr(self, 'executor') and self.executor:
-    #             self.executor.set_accounts(filtered)
-    #             if SHOW_DEBUG:
-    #                 log_debug(self.log_box, "[로그인 처리] executor에 계좌 리스트 전달 완료")
-
-    #         # 🔁 UI에 로그인 완료 알림 (콜백 방식)
-    #         if hasattr(self, "on_login_complete") and callable(self.on_login_complete):
-    #             self.on_login_complete()
-
-    #     else:
-    #         log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
+    
     def handle_login_event(self, err_code):
         if err_code == 0:
             log(self.log_box, "✅ 로그인 성공")
