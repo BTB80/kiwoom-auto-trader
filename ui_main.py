@@ -36,6 +36,7 @@ from strategy_executor import AutoTradeExecutor
 from PyQt5.QtCore import QTimer
 from modules.telegram_utils import configure_telegram
 from modules.all_holdings_popup import AllHoldingsPopup
+
 from utils import log_trade
 from utils import (
     log_debug,
@@ -145,142 +146,112 @@ class AutoTradeUI(QMainWindow):
         super().__init__()
         uic.loadUi("ui/autotrade.ui", self)
 
-        # 전역 기본 폰트
-        default_font = QFont("맑은 고딕", 8)
-        self.setFont(default_font)
+        self.setup_fonts()
+        self.setup_clock()
+        self.setup_buttons()
+        self.setup_strategy_ui()
+        self.setup_schedule_timer()
+        self.setup_tabs()
+        self.setup_config()
+        self.setup_tables()
+        self.setup_log()
+        self.setup_account_sections()
+        self.setup_misc_ui()
+        self.setup_menu_actions()
+        self.refresh_schedule_dropdown_main()
+        self.connect_signals()
 
-        # ✅ 시계 라벨 생성
+    def setup_fonts(self):
+        self.setFont(QFont("맑은 고딕", 8))
+
+    def setup_clock(self):
         self.clock_label = QLabel()
         self.clock_label.setStyleSheet(CLOCK_LABEL_STYLE)
         self.clock_label.setAlignment(Qt.AlignCenter)
-        # ✅ 현재 시간으로 초기화
         self.update_clock()
 
-        # ✅ 1초마다 시계 갱신 타이머
         self.clock_timer = QTimer(self)
         self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
-        
-        # ✅ 매수/매도 설정 박스 생성 및 삽입
-        buy_box = create_buy_settings_groupbox()
-        sell_box = create_sell_settings_groupbox()
-        self.buy_settings_group.layout().addWidget(buy_box)
-        self.sell_settings_group.layout().addWidget(sell_box)
-        
-        self.max_holdings_input = self.findChild(QLineEdit, "max_holdings_input")
-        self.max_holdings_input.setText("10")  # 기본값
-        self.trade_start_button = self.findChild(QPushButton, "trade_start_button")
-        self.trade_stop_button = self.findChild(QPushButton, "trade_stop_button")
-        self.schedule_enabled_button = self.findChild(QPushButton, "schedule_enabled_button")
-        self.schedule_button = self.findChild(QPushButton, "schedule_button")
-        self.config_button = self.findChild(QPushButton, "config_button")
-            
 
-        for btn in [self.login_button, self.trade_start_button, self.trade_stop_button]:
-            btn.setStyleSheet(UNIFORM_BUTTON_STYLE)
-        
+        self.topBar = self.findChild(QHBoxLayout, "topBar")
+        self.topBar.addWidget(self.clock_label)
 
-        # ✅ 전략 위젯 요소 연결
+    def setup_buttons(self):
+        button_names = [
+            "login_button", "trade_start_button", "trade_stop_button",
+            "strategy_save_button", "strategy_delete_button", "view_all_holdings_button",
+            "schedule_enabled_button", "schedule_button", "config_button"
+        ]
+        for name in button_names:
+            btn = self.findChild(QPushButton, name)
+            if btn:
+                btn.setStyleSheet(UNIFORM_BUTTON_STYLE)
+                btn.setFixedWidth(100)
+
+    def setup_strategy_ui(self):
         self.strategy_dropdown = self.findChild(QComboBox, "strategy_dropdown")
         self.strategy_name_input = self.findChild(QLineEdit, "strategy_name_input")
         self.strategy_name_input.setMaximumWidth(250)
-        self.strategy_save_button = self.findChild(QPushButton, "strategy_save_button")
-        self.strategy_delete_button = self.findChild(QPushButton, "strategy_delete_button")        
         self.load_existing_strategies()
-        self.condition_auto_buy_checkbox = self.findChild(QPushButton, "condition_auto_buy_checkbox")  
-        self.schedule_dropdown_main = self.findChild(QComboBox, "schedule_dropdown_main")
-        
-        # ✅ 전략 위젯 시그널 연결
 
-        
-        # ✅ 전체잔고보기 버튼
-        self.view_all_holdings_button = self.findChild(QPushButton, "view_all_holdings_button")
-
-        
-        # ✅ 시계창
-        self.topBar.addWidget(self.clock_label)  
-        
+    def setup_schedule_timer(self):
         self.schedule_timer = QTimer(self)
         self.schedule_timer.timeout.connect(self.check_schedule_and_apply)
-        self.schedule_timer.start(1000 * 30)  # 30초마다 확인
-        
-        # ✅ 테이블 설정
-        self.log_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        # 탭 위젯 연결
+        self.schedule_timer.start(1000 * 30)
+
+    def setup_tabs(self):
         self.account_tab = self.findChild(QTabWidget, "account_tab")
         self.watchlist_tabwidget = self.findChild(QTabWidget, "watchlist_tabwidget")
-
-        # 스타일 일괄 적용
         tab_font = QFont("맑은 고딕", 10)
         for tab in [self.account_tab, self.watchlist_tabwidget]:
             if tab:
                 tab.setStyleSheet(TAB_STYLE)
-                
-        self.account_tab.tabBar().setFont(tab_font)
-        self.watchlist_tabwidget.tabBar().setFont(tab_font)
-        
-        
+                tab.tabBar().setFont(tab_font)
+        if self.account_tab:
+            self.account_tab.setTabText(0, "📊 잔고")
+            self.account_tab.setTabText(1, "📦 미체결")
+            self.account_tab.setTabText(2, "🧾 매매내역")
+
+    def setup_config(self):
         self.config = load_user_config()
-        update_debug_flags(self.config) 
-        # ✅ 이 부분이 핵심입니다!
+        update_debug_flags(self.config)
         self.sheet_id = self.config.get("sheet_id", "")
         self.sheet_name = self.config.get("sheet_name", "관심종목")
-
-        # 텔레그램도 함께!
         token = self.config.get("telegram_token", "")
         chat_id = self.config.get("telegram_chat_id", "")
         if token and chat_id:
             configure_telegram(token, chat_id)
 
+    def setup_tables(self):
         self.setup_core_objects()
-        self.setup_stock_search_table() 
+        self.setup_stock_search_table()
         self.setup_holdings_table()
         self.setup_condition_table()
         self.setup_unsettled_table()
         self.setup_trade_log_table()
-
         self.setup_table_fonts()
-        
-        # ✅ 실시간 종목 감시용 목록
-        self.watchlist = []
 
-        # ✅ UI 요소 연결 이후에 set_ui_elements 호출
-        self.manager.set_ui_elements(
-            self.account_combo,
-            self.account_info_label,
-            self.holdings_table,
-            self.log_box,
-            self.unsettled_table,
-        )
-        self.manager.trade_log_table = self.trade_log_table
-        
-        # ✅ 관심종목 테이블 연결 추가
-        self.manager.stock_search_table = self.stock_search_table
-        
-
-        # ✅ log_box가 준비된 이후에 ConditionManager 초기화
-        
-        self.condition_manager = ConditionManager(self.api, log_fn=lambda msg: log(self.log_box, msg))
-        # ✅ 조건식 목록 불러오기 (여기 추가!)
-        
-
-        # ✅ 조건검색 결과 시그널 연결
-        
-        
-        # ✅ 로그 기록 위젯 지정
+    def setup_log(self):
+        self.log_box = self.findChild(QTextEdit, "log_box")
+        self.log_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         log_trade.log_widget = self.log_box
-        
-        # ✅ Qt 시그널 연결
-        self.api.ocx.OnEventConnect.connect(self.on_login_event)
-        self.api.ocx.OnReceiveTrData.connect(self.handle_tr_data)
-        self.api.ocx.OnReceiveRealData.connect(self.on_real_data)
+        log_label = self.findChild(QLabel, "log_label")
+        if log_label:
+            log_label.setStyleSheet(LABEL_STYLE)
+            log_label.setAlignment(Qt.AlignLeft)
+        log_container = self.log_label.parentWidget()
+        if log_container:
+            layout = log_container.layout()
+            if layout:
+                layout.setContentsMargins(10, 0, 10, 10)
 
-        
-        self.watchlist_button = self.findChild(QPushButton, "watchlist_button")
-        
+    def setup_account_sections(self):
+        buy_box = create_buy_settings_groupbox()
+        sell_box = create_sell_settings_groupbox()
+        self.buy_settings_group.layout().addWidget(buy_box)
+        self.sell_settings_group.layout().addWidget(sell_box)
 
-        # ✅ 매수/매도 위젯 연결
         self.buy_order_type_combo = buy_box.findChild(QComboBox, "buy_order_type_combo")
         self.buy_test_mode_checkbox = buy_box.findChild(QPushButton, "buy_test_mode_checkbox")
         self.buy_account_buttons = [buy_box.findChild(QPushButton, f"buy_account_button_{i+1}") for i in range(4)]
@@ -291,98 +262,58 @@ class AutoTradeUI(QMainWindow):
         self.sell_account_buttons = [sell_box.findChild(QPushButton, f"sell_account_button_{i+1}") for i in range(4)]
         self.sell_ratio_inputs = [sell_box.findChild(QLineEdit, f"sell_ratio_input_{i+1}") for i in range(4)]
         self.sell_profit_inputs = [sell_box.findChild(QLineEdit, f"sell_profit_input_{i+1}") for i in range(4)]
-        
+
+        self.max_holdings_input = self.findChild(QLineEdit, "max_holdings_input")
+        self.max_holdings_input.setText("10")
+        self.max_holdings_input.setMaximumWidth(40)
+        self.max_holdings_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.max_holdings_input.setAlignment(Qt.AlignCenter)
+        font_input = self.max_holdings_input.font()
+        font_input.setBold(True)
+        self.max_holdings_input.setFont(font_input)
+
         self.setup_account_buttons()
         self.setup_table_styles()
-        
-        
-        # 레이아웃 stretch 설정
-        self.topBar = self.findChild(QHBoxLayout, "topBar")
+
+    def setup_misc_ui(self):
+        self.watchlist = []
+        self.manager.set_ui_elements(
+            self.account_combo,
+            self.account_info_label,
+            self.holdings_table,
+            self.log_box,
+            self.unsettled_table,
+        )
+        self.manager.trade_log_table = self.trade_log_table
+        self.manager.stock_search_table = self.stock_search_table
+
+        self.condition_manager = ConditionManager(self.api, log_fn=lambda msg: log(self.log_box, msg))
+
+        self.api.ocx.OnEventConnect.connect(self.on_login_event)
+        self.api.ocx.OnReceiveTrData.connect(self.handle_tr_data)
+        self.api.ocx.OnReceiveRealData.connect(self.on_real_data)
+
+        watchlist_label = self.findChild(QLabel, "watchlist_label")
+        if watchlist_label:
+            watchlist_label.setStyleSheet(LABEL_STYLE)
+            watchlist_label.setAlignment(Qt.AlignLeft)
+        tab_watchlist = self.findChild(QWidget, "tab_watchlist")
+        if tab_watchlist:
+            layout = tab_watchlist.layout()
+            if layout:
+                layout.setContentsMargins(10, 0, 10, 10)
+
         layout = self.findChild(QHBoxLayout, "topInfoLayout")
         if layout:
             layout.setStretch(0, 1)
             layout.setStretch(1, 1)
             layout.setStretch(2, 3)
             layout.setStretch(3, 3)
-        
-        # 폼 요소 사이즈 제한
-        self.max_holdings_input.setMaximumWidth(40)
-        self.max_holdings_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        
-        # 👉 입력란 가운데 정렬 + 진하게
-        self.max_holdings_input.setAlignment(Qt.AlignCenter)
-        font_input = self.max_holdings_input.font()
-        font_input.setBold(True)
-        self.max_holdings_input.setFont(font_input)
 
-        # ✅ 분할매수 / 분할매도 제목 스타일 및 텍스트 변경
-        buy_settings_group = self.findChild(QGroupBox, "buy_settings_group")
-        if buy_settings_group:
-            buy_settings_group.setTitle("📈 분할매수")
-            buy_settings_group.setStyleSheet(GROUPBOX_STYLE)
-
-        sell_settings_group = self.findChild(QGroupBox, "sell_settings_group")
-        if sell_settings_group:
-            sell_settings_group.setTitle("📉 분할매도")
-            sell_settings_group.setStyleSheet(GROUPBOX_STYLE)
-            
-        # 관심종목 및 조건검색 테이블 연결
-
-        watchlist_label = self.findChild(QLabel, "watchlist_label")
-        if watchlist_label:
-            watchlist_label.setStyleSheet(LABEL_STYLE)
-            watchlist_label.setAlignment(Qt.AlignLeft)
-
-            # ⛳ 탭 내부 위젯에서 직접 layout 추출
-            tab_watchlist = self.findChild(QWidget, "tab_watchlist")
-            if tab_watchlist:
-                layout = tab_watchlist.layout()
-                if layout:
-                    layout.setContentsMargins(10, 0, 10, 10)  # 좌우 마진
-                    
-        # 로그 라벨 스타일 적용
-        log_label = self.findChild(QLabel, "log_label")
-        if log_label:
-            log_label.setStyleSheet(LABEL_STYLE)
-            log_label.setAlignment(Qt.AlignLeft)
-        
-        uniform_width = 100
-        for name in [
-            "login_button", "trade_start_button", "trade_stop_button",
-            "strategy_save_button", "strategy_delete_button", "view_all_holdings_button"
-        ]:
-            btn = self.findChild(QPushButton, name)
-            if btn:
-                btn.setFixedWidth(uniform_width)
-
-            
-        account_tab = self.findChild(QTabWidget, "account_tab")
-        if account_tab:
-            account_tab.setStyleSheet(TAB_STYLE)
-            account_tab.setTabText(0, "📊 잔고")
-            account_tab.setTabText(1, "📦 미체결")
-            account_tab.setTabText(2, "🧾 매매내역")
-        
-        
-        
         self.condition_dropdown = self.findChild(QComboBox, "condition_dropdown")
         self.condition_search_button = self.findChild(QPushButton, "condition_search_button")
-        
-
         self.is_fullscreen = False
-        # 로그 VBox 마진 조정
-        log_container = self.log_label.parentWidget()
-        if log_container:
-            layout = log_container.layout()
-            if layout:
-                layout.setContentsMargins(10, 0, 10, 10)  # 좌측 5px, 우측 10px
-                
-        self.log_box = self.findChild(QTextEdit, "log_box")
-        self.setup_menu_actions()
-        self.refresh_schedule_dropdown_main()
-        
-        self.manager.on_login_complete = self.on_login_complete
-        self.connect_signals()
+
         
     def setup_core_objects(self):
         self.api = KiwoomAPI()
@@ -398,12 +329,21 @@ class AutoTradeUI(QMainWindow):
         self.manager.set_executor(self.executor)
         self.manager.basic_info_map = self.basic_info_map
         
+         # ✅ 여기에서 컨트롤러 초기화
+        from modules.watchlist_controller import WatchlistController
+        from modules.condition_controller import ConditionSearchController
+
+        self.watchlist_controller = WatchlistController(self, self.api, lambda msg: log(self.log_box, msg))
+        self.condition_controller = ConditionSearchController(self, self.api, lambda msg: log(self.log_box, msg))
+        
     def connect_signals(self):
         self.login_button.clicked.connect(self.login)
         self.trade_start_button.clicked.connect(self.handle_trade_start)
         self.trade_stop_button.clicked.connect(self.handle_trade_stop)
         self.view_all_holdings_button.clicked.connect(self.show_all_holdings_popup)
-        self.watchlist_button.clicked.connect(self.load_watchlist_from_google)
+        self.watchlist_button.clicked.connect(
+            lambda: self.watchlist_controller.load_watchlist_from_google(self.sheet_id, self.sheet_name)
+        )
 
         if self.schedule_button:
             self.schedule_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
@@ -416,8 +356,7 @@ class AutoTradeUI(QMainWindow):
         self.schedule_enabled_button.setCheckable(True)
         self.schedule_enabled_button.toggled.connect(self.on_schedule_toggle)
 
-        if self.condition_search_button:
-            self.condition_search_button.clicked.connect(self.handle_condition_search)
+        
 
         self.condition_auto_buy_checkbox.setCheckable(True)
         self.condition_auto_buy_checkbox.toggled.connect(self.toggle_condition_auto_buy)
@@ -430,44 +369,35 @@ class AutoTradeUI(QMainWindow):
         self.account_combo.currentTextChanged.connect(self.manager.request_deposit_info)
         self.account_combo.currentTextChanged.connect(self.handle_account_selected)
 
-        self.api.ocx.OnReceiveTrCondition.connect(self.on_receive_tr_condition)
+        self.api.ocx.OnReceiveTrCondition.connect(self.condition_controller.on_receive_tr_condition)
+        self.api.ocx.OnReceiveConditionVer.connect(self.condition_controller.on_condition_loaded)
+        self.condition_search_button.clicked.connect(self.condition_controller.handle_search)
         self.api.ocx.OnReceiveRealCondition.connect(self.on_receive_real_condition)
-        self.api.ocx.OnReceiveConditionVer.connect(self.on_condition_loaded)
+        
 
     def setup_buttons(self):
-        # 일반 버튼들: 스타일 + 클릭 연결
-        button_defs = [
-            ("config_button", self.open_config_dialog, False),
-            ("schedule_button", self.open_schedule_settings),
-            ("login_button", self.login),
-            ("trade_start_button", self.handle_trade_start),
-            ("trade_stop_button", self.handle_trade_stop),
-            ("view_all_holdings_button", self.show_all_holdings_popup),
-            ("watchlist_button", self.load_watchlist_from_google),
-            ("strategy_save_button", self.handle_save_strategy),
-            ("strategy_delete_button", self.handle_delete_strategy),
-            ("condition_search_button", self.handle_condition_search),
+        # 일반 버튼들: 스타일만 적용 (시그널 연결은 connect_signals에서)
+        button_names = [
+            "config_button", "schedule_button", "login_button",
+            "trade_start_button", "trade_stop_button",
+            "view_all_holdings_button", "watchlist_button",
+            "strategy_save_button", "strategy_delete_button",
+            "condition_search_button"
         ]
 
-        for name, slot, *rest in button_defs:
+        for name in button_names:
             btn = self.findChild(QPushButton, name)
             if btn:
                 btn.setStyleSheet(UNIFORM_BUTTON_STYLE)
-                if name == "config_button":
-                    btn.clicked.connect(lambda _, s=slot: s(first_time=False))
-                elif slot:
-                    btn.clicked.connect(slot)
+                btn.setFixedWidth(100)
 
-        # 체크 가능한 버튼: 체크 상태 + 토글 시그널
-        toggle_defs = [
-            ("schedule_enabled_button", self.on_schedule_toggle),
-            ("condition_auto_buy_checkbox", self.toggle_condition_auto_buy)
-        ]
-        for name, slot in toggle_defs:
+        # 체크 가능한 버튼: 체크 설정만 (시그널은 connect_signals에서)
+        toggle_names = ["schedule_enabled_button", "condition_auto_buy_checkbox"]
+        for name in toggle_names:
             btn = self.findChild(QPushButton, name)
             if btn:
                 btn.setCheckable(True)
-                btn.toggled.connect(slot)
+
 
     def setup_holdings_table(self):
         self.holdings_table = self.findChild(QTableWidget, "holdings_table")
@@ -612,9 +542,6 @@ class AutoTradeUI(QMainWindow):
             self.sell_ratio_inputs[i].setText(str(acc_data.get("ratio", 0)))
             self.sell_profit_inputs[i].setText(str(acc_data.get("profit_rate", 0.0)))      
             
-            
-    
-        
     def setup_account_buttons(self):
         self.account_buttons = [
             self.findChild(QPushButton, "account_button_1"),
@@ -687,66 +614,57 @@ class AutoTradeUI(QMainWindow):
         self.executor.reconstruct_pending_buys_from_unsettled()
     
         
-    @pyqtSlot("int")
+    @pyqtSlot()
+    def login(self):
+        log(self.log_box, "🔑 로그인 요청 중...")
+        self.api.connect()
+
+
     def on_login_event(self, err_code):
         self.manager.handle_login_event(err_code)
 
-        if err_code == 0:
-            # ✅ 체결 이벤트 핸들러 등록
-            self.api.register_chejan_handler(self.executor.handle_chejan_data)
-            print("✅ 체결 이벤트 핸들러 등록 완료")
-
-            accounts = [self.account_combo.itemText(i) for i in range(self.account_combo.count())]
-            self.accounts = accounts
-            self.executor.set_accounts(accounts)
-
-            # ✅ holdings 추적용 세팅
-            self.manager.expected_accounts = set(accounts)
-            self.manager.received_accounts = set()
-            self.manager.holdings_loaded = False
-
-            if accounts:
-                first_account = accounts[0]
-                self.first_account = first_account
-                self.account_combo.setCurrentText(first_account)
-
-                # ✅ 잔고 수신 완료 후 계좌 선택 및 기타 요청 실행
-                def after_holdings_loaded():
-                    self.on_holdings_loaded()
-                    self.handle_account_selected(first_account)
-                    self.manager.request_today_profit(first_account)
-                    self.manager.request_estimated_asset(first_account)
-
-                self.manager.request_all_holdings(
-                    accounts,
-                    on_complete=after_holdings_loaded
-                )
-
-            # ✅ 기본 전략 자동 로드
-            if self.strategy_dropdown and self.strategy_dropdown.findText("기본") != -1:
-                self.strategy_dropdown.setCurrentText("기본")
-                self.handle_strategy_selected("기본")
-
-            # ✅ 조건식 로드
-            self.api.ocx.dynamicCall("GetConditionLoad()")
-
-        else:
+        if err_code != 0:
             log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
+            return
 
-            
-    def on_login_complete(self):
-                self.trade_start_button.setEnabled(False)  # 🔒 먼저 비활성화
-                self.login_button.setStyleSheet(LOGIN_STYLE)
-                self.manager.request_all_holdings(
-                    accounts=self.manager.accounts,
-                    on_complete=self.on_holdings_loaded   
-            )
+        log(self.log_box, "✅ 로그인 성공")
 
-    @pyqtSlot()
-    def login(self):
-        log(self.log_box, "\U0001F511 로그인 요청 중...")
-        self.api.connect()
-                    
+        # ✅ 체결 이벤트 핸들러 등록
+        self.api.register_chejan_handler(self.executor.handle_chejan_data)
+        print("✅ 체결 이벤트 핸들러 등록 완료")
+
+        # ✅ 계좌 목록 세팅
+        accounts = [self.account_combo.itemText(i) for i in range(self.account_combo.count())]
+        self.accounts = accounts
+        self.executor.set_accounts(accounts)
+
+        # ✅ holdings 추적용 세팅
+        self.manager.expected_accounts = set(accounts)
+        self.manager.received_accounts = set()
+        self.manager.holdings_loaded = False
+
+        if accounts:
+            first_account = accounts[0]
+            self.first_account = first_account
+            self.account_combo.setCurrentText(first_account)
+
+            def after_holdings_loaded():
+                self.on_holdings_loaded()
+                self.handle_account_selected(first_account)
+                self.manager.request_today_profit(first_account)
+                self.manager.request_estimated_asset(first_account)
+
+            # ✅ 전체 잔고 요청 시작
+            self.manager.request_all_holdings(accounts, on_complete=after_holdings_loaded)
+
+        # ✅ 기본 전략 자동 로드
+        if self.strategy_dropdown and self.strategy_dropdown.findText("기본") != -1:
+            self.strategy_dropdown.setCurrentText("기본")
+            self.handle_strategy_selected("기본")
+
+        # ✅ 조건식 로드
+        self.api.ocx.dynamicCall("GetConditionLoad()")
+           
 
     def start_auto_trade(self):
         if not getattr(self.manager, "holdings_loaded", False):
@@ -861,75 +779,11 @@ class AutoTradeUI(QMainWindow):
             except Exception as e:
                 log(self.log_box, f"❌ 현재가 변환 실패: {code} → '{price_str}' / {e}")
 
-
-
     def handle_tr_data(self, scr_no, rq_name, tr_code, record_name, prev_next):
         if rq_name.startswith("기본정보_"):
             handle_watchlist_tr_data(self.api, self.stock_search_table, self.basic_info_map, rq_name, tr_code)
         else:
             self.manager.handle_tr_data(scr_no, rq_name, tr_code, record_name, prev_next)
-            
-            
-            
-            
-            
-            
-
-    def load_watchlist_from_google(self):
-        try:
-            # ✅ 설정된 시트 ID와 이름 불러오기
-            sheet_id = getattr(self, "sheet_id", "")
-            sheet_name = getattr(self, "sheet_name", "관심종목")
-
-            if not sheet_id:
-                log(self.log_box, "❌ 구글 시트 ID가 설정되어 있지 않습니다.")
-                return
-
-            self.watchlist = fetch_google_sheet_data(sheet_id, sheet_name)
-            display_watchlist(self.stock_search_table, self.watchlist, self.manual_buy_clicked)
-
-            for stock in self.watchlist:
-                try:
-                    code, name, tag = stock
-                except ValueError:
-                    code, name = stock
-                    tag = ""
-                log(self.log_box, f"🔎 관심종목: {code} | {name} | {tag}")
-
-            self.request_basic_info_for_watchlist()
-            self.start_watchlist_realtime()
-
-            if self.is_market_closed():
-                self.request_all_watchlist_prices_by_tr()
-
-        except Exception as e:
-            log(self.log_box, f"❌ 관심종목 불러오기 실패: {e}")
-
-
-    def request_basic_info_for_watchlist(self):
-        if not getattr(self, "watchlist", []):
-            log(self.log_box, "⚠️ 관심종목 없음: 기본정보 요청 생략")
-            return
-
-        self.watchlist_tr_index = 0
-        self.retry_watchlist_queue = []
-        self.send_next_watchlist_tr()
-
-    def start_watchlist_realtime(self):
-        if not getattr(self, "watchlist", []):
-            log(self.log_box, "⚠️ 실시간 등록 실패: watchlist 비어 있음")
-            return
-
-        try:
-            code_list = ";".join([stock[0] for stock in self.watchlist])
-            screen_no = "9100"
-            self.api.ocx.dynamicCall(
-                "SetRealReg(QString, QString, QString, QString)",
-                screen_no, code_list, "10;11;12", "0"
-            )
-            log(self.log_box, f"📡 관심종목 실시간 등록 완료 ({len(self.watchlist)} 종목)")
-        except Exception as e:
-            log(self.log_box, f"❌ 관심종목 실시간 등록 실패: {e}")
 
     def is_market_closed(self):
         now = datetime.datetime.now()
@@ -937,48 +791,6 @@ class AutoTradeUI(QMainWindow):
         hour = now.hour
         minute = now.minute
         return weekday >= 5 or (hour > 15 or (hour == 15 and minute >= 30))
-
-    def request_all_watchlist_prices_by_tr(self):
-        if not getattr(self, "watchlist", []):
-            log(self.log_box, "⚠️ 관심종목 없음: TR 요청 생략")
-            return
-
-        self.watchlist_tr_index = 0
-        self.retry_watchlist_queue = []  # ❗ 재요청 큐 초기화
-        self.send_next_watchlist_tr()
-
-    def send_next_watchlist_tr(self):
-        if self.watchlist_tr_index >= len(self.watchlist):
-            log(self.log_box, f"✅ 관심종목 1차 TR 요청 완료, 누락종목 수: {len(self.retry_watchlist_queue)}")
-            QTimer.singleShot(3000, self.send_retry_watchlist_tr)
-            return
-
-        stock = self.watchlist[self.watchlist_tr_index]
-        code = stock[0]
-        self.api.set_input_value("종목코드", code)
-        rq_name = f"보완TR_{code}"
-        screen_no = f"{9100 + int(code[-2:]):04d}"
-        self.api.send_request(rq_name, TR_WATCHLIST_DETAILS, 0, screen_no)
-        log(self.log_box, f"📨 기본정보 요청: {code}")
-
-        self.watchlist_tr_index += 1
-        QTimer.singleShot(1500, self.send_next_watchlist_tr)
-
-    def send_retry_watchlist_tr(self):
-        log(self.log_box, f"🔁 재요청 진입 → 큐 크기: {len(self.retry_watchlist_queue)}")
-        
-        if not self.retry_watchlist_queue:
-            log(self.log_box, "✅ 누락 종목 재요청 완료")
-            return
-
-        code = self.retry_watchlist_queue.pop(0)
-        self.api.set_input_value("종목코드", code)
-        rq_name = f"재요청TR_{code}"
-        screen_no = f"{9300 + int(code[-2:]):04d}"
-        self.api.send_request(rq_name, TR_WATCHLIST_DETAILS, 0, screen_no)
-        log(self.log_box, f"🔁 재요청: {code}")
-
-        QTimer.singleShot(1500, self.send_retry_watchlist_tr)
                    
     def manual_buy_clicked(self, code):
         account = self.executor.get_account_by_step(1)  # 계좌1
@@ -1148,12 +960,6 @@ class AutoTradeUI(QMainWindow):
             log(self.log_box, f"🗑 전략 '{strategy_name}' 삭제됨")
         else:
             log(self.log_box, f"⚠️ 전략 '{strategy_name}' 삭제 실패")
-                       
-
-
-    
-
-
 
     def show_all_holdings_popup(self):
         if not hasattr(self, 'accounts') or not self.accounts:
@@ -1181,140 +987,6 @@ class AutoTradeUI(QMainWindow):
         time_str = now.toString(f"MM-dd({day_of_week}) HH:mm:ss")
         self.clock_label.setText(time_str)
         
-
-    def fetch_next_condition_stock(self):
-        # 재시도 큐 초기화 (최초 호출 시)
-        if not hasattr(self, "condition_retry_queue"):
-            self.condition_retry_queue = []
-
-        if self.condition_result_index >= len(self.condition_result_codes):
-            if self.condition_retry_queue:
-                log(self.log_box, f"🔁 누락 종목 재시도 시작 ({len(self.condition_retry_queue)}건)")
-                QTimer.singleShot(1000, self.fetch_retry_condition_stock)
-                return
-
-            if self.condition_result_data:
-                log(self.log_box, f"📥 조건검색 결과 {len(self.condition_result_data)}건 반영 완료")
-                display_condition_results(self.condition_table, self.condition_result_data, self.manual_buy_clicked)
-            else:
-                log(self.log_box, "⚠️ 조건검색 결과가 없습니다. (가격정보 누락 또는 조회 실패 가능)")
-                self.condition_table.setRowCount(0)
-            return
-
-        code = self.condition_result_codes[self.condition_result_index]
-        rq_name = f"조건식_TR_{code}"
-        screen_no = f"60{code[-2:]}"
-        self.api.set_input_value("종목코드", code)
-        self.api.send_request(rq_name, "opt10001", 0, screen_no)
-
-        # ✅ 일단 누락 후보로 추가 (성공 시 별도 제거)
-        if code not in self.condition_retry_queue:
-            self.condition_retry_queue.append(code)
-
-        self.condition_result_index += 1
-        QTimer.singleShot(200, self.fetch_next_condition_stock)
-
-    def fetch_retry_condition_stock(self):
-        if not self.condition_retry_queue:
-            if self.condition_result_data:
-                log(self.log_box, f"📥 조건검색 결과 {len(self.condition_result_data)}건 반영 완료 (재시도 포함)")
-                display_condition_results(self.condition_table, self.condition_result_data, self.manual_buy_clicked)
-            else:
-                log(self.log_box, "⚠️ 재시도 후에도 조건검색 결과 없음")
-                self.condition_table.setRowCount(0)
-            return
-
-        code = self.condition_retry_queue.pop(0)
-        rq_name = f"조건재요청_TR_{code}"
-        screen_no = f"61{code[-2:]}"
-        self.api.set_input_value("종목코드", code)
-        self.api.send_request(rq_name, "opt10001", 0, screen_no)
-
-        QTimer.singleShot(700, self.fetch_retry_condition_stock)
-
-
-
-
-    
-
-    
-# 조건검색 드롭다운 + 실행 버튼 연결 예시
-    def initialize_condition_dropdown(self):
-        cond_list = self.condition_manager.load_condition_list()
-        self.condition_dropdown.clear()
-
-        if not cond_list:
-            log(self.log_box, "⚠️ 조건식이 없습니다.")
-            return
-
-        for index, name in cond_list:
-            self.condition_dropdown.addItem(f"{index}: {name}")
-
-        self.condition_list = cond_list  # 필요 시 저장
-
-
-
-
-    def handle_condition_search(self):
-        current_text = self.condition_dropdown.currentText()
-        if not current_text or ":" not in current_text:
-            log(self.log_box, "⚠️ 조건식을 선택하세요.")
-            return
-
-        index_str, name = current_text.split(":", 1)
-        try:
-            index = int(index_str.strip())
-        except ValueError:
-            log(self.log_box, "❌ 조건식 인덱스가 올바르지 않습니다.")
-            return
-
-        name = name.strip()
-        screen_no = "5000"
-        log(self.log_box, f"🔍 조건검색 실행: {index} - {name}")
-        self.api.ocx.dynamicCall("SendCondition(QString, QString, int, int)", screen_no, name, index, 1)
-
-
-    @pyqtSlot("QString", "QString", "QString", int, int)
-    def on_receive_tr_condition(self, screen_no, codes, condition_name, condition_index, next_):
-        if not codes:
-            log(self.log_box, f"⚠️ 조건 '{condition_name}' 결과 없음")
-            return
-
-        code_list = [code.strip() for code in codes.split(';') if code.strip()]
-
-        # ✅ 기존 실시간 등록 해제
-        self.api.ocx.dynamicCall("DisconnectRealData(QString)", screen_no)
-
-        # ✅ 실시간 등록 (현재가, 전일가 등)
-        fid_list = "10;11"
-        if code_list:
-            codes_str = ";".join(code_list)
-            self.api.ocx.dynamicCall(
-                "SetRealReg(QString, QString, QString, QString)",
-                screen_no, codes_str, fid_list, "1"
-            )
-
-        # ✅ 내부 상태 초기화 및 순차 TR 조회 시작
-        self.condition_result_codes = code_list
-        self.condition_result_data = []
-        self.condition_result_index = 0
-        self.current_condition_name = condition_name  # 조건식명 기억
-        self.fetch_next_condition_stock()
-
-        log(self.log_box, f"✅ 조건 '{condition_name}' 결과 수신: {len(code_list)}건, 실시간 등록 및 TR 조회 시작")
-
-        
-    def set_condition_auto_buy_enabled(self, enabled: bool):
-        self.auto_buy_enabled = enabled
-        
-    @pyqtSlot("int", "QString")
-    def on_condition_loaded(self, ret, msg):
-        if ret == 1:
-            log(self.log_box, "✅ 조건식 로드 완료")
-            self.initialize_condition_dropdown()  # ✅ 수정된 함수 호출
-        else:
-            log(self.log_box, "❌ 조건식 로드 실패")
-            
     def check_schedule_and_apply(self):
         if not self.executor.enabled:
             return
@@ -1437,10 +1109,7 @@ class AutoTradeUI(QMainWindow):
         self.actionOpenConfigDialog = self.findChild(QAction, "actionOpenConfigDialog")
         if self.actionOpenConfigDialog:
             self.actionOpenConfigDialog.triggered.connect(self.open_config_dialog)
-
-
-    
-                
+         
     def refresh_schedule_dropdown_main(self, selected_name=None):
         if not hasattr(self, "schedule_dropdown_main"):
             return
@@ -1472,8 +1141,6 @@ class AutoTradeUI(QMainWindow):
         else:
             log(self.log_box, f"📂 스케줄 '{name}' 불러옴 (적용은 스케줄 토글 ON 시 실행됨)")
 
-
-            
     def on_schedule_toggle(self, checked):
         if checked:
             name = self.schedule_dropdown_main.currentText()
@@ -1533,7 +1200,4 @@ class AutoTradeUI(QMainWindow):
         else:
             QMessageBox.information(self, "설정 적용됨", "✅ 설정이 저장되었습니다.\n프로그램을 재시작하면 디버그 모드가 적용됩니다.")
 
-
-
-            
 __all__ = ["AutoTradeUI"]

@@ -99,9 +99,6 @@ class AccountManager:
                 if SHOW_DEBUG:
                     log_debug(self.log_box, "[로그인 처리] executor에 계좌 리스트 전달 완료")
 
-            if hasattr(self, "on_login_complete") and callable(self.on_login_complete):
-                self.on_login_complete()
-
         else:
             log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
 
@@ -348,7 +345,9 @@ class AccountManager:
                 if hasattr(ui, "condition_retry_queue") and code in ui.condition_retry_queue:
                     ui.condition_retry_queue.remove(code)
 
-                ui.condition_result_data.append([code, name, prev, curr, rate, ui.current_condition_name])
+                ui.condition_controller.condition_result_data.append(
+                    [code, name, prev, curr, rate, ui.condition_controller.current_condition_name]
+                )
 
                 if ui.condition_auto_buy_checkbox.isChecked() and hasattr(self, "executor"):
                     buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
@@ -360,7 +359,7 @@ class AccountManager:
                         self.executor.send_buy_order(code, amount, step=step, current_price=curr)
                         self.executor.pending_buys.add((code, account))
 
-                QTimer.singleShot(300, ui.fetch_next_condition_stock)
+                QTimer.singleShot(300, ui.condition_controller.fetch_next_condition_stock)
 
             return
 

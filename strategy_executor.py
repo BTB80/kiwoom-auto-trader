@@ -373,8 +373,8 @@ class AutoTradeExecutor:
                 account_holdings[account_no] = {"buy_price": price, "qty": qty}
 
             # ✅ executor에도 반영
-            if hasattr(self, "executor"):
-                self.executor.record_holding(code, account_no, qty, price)
+            # if hasattr(self, "executor"):
+            #     self.executor.record_holding(code, account_no, qty, price)
 
             if hasattr(self, "reconstruct_buy_history_from_holdings"):
                 self.reconstruct_buy_history_from_holdings()
