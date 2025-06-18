@@ -313,8 +313,7 @@ class AutoTradeUI(QMainWindow):
         self.condition_dropdown = self.findChild(QComboBox, "condition_dropdown")
         self.condition_search_button = self.findChild(QPushButton, "condition_search_button")
         self.is_fullscreen = False
-
-        
+   
     def setup_core_objects(self):
         self.api = KiwoomAPI()
         self.basic_info_map = {}
@@ -338,8 +337,7 @@ class AutoTradeUI(QMainWindow):
 
         # ✅ 실시간 조건검색 이벤트 연결
         self.api.ocx.OnReceiveRealCondition.connect(self.condition_controller.on_receive_real_condition)
-
-        
+       
     def connect_signals(self):
         self.login_button.clicked.connect(self.login)
         self.trade_start_button.clicked.connect(self.handle_trade_start)
@@ -378,8 +376,6 @@ class AutoTradeUI(QMainWindow):
         self.condition_search_button.clicked.connect(self.condition_controller.handle_search)
         self.api.ocx.OnReceiveRealCondition.connect(self.condition_controller.on_receive_real_condition)
 
-        
-
     def setup_buttons(self):
         # 일반 버튼들: 스타일만 적용 (시그널 연결은 connect_signals에서)
         button_names = [
@@ -402,7 +398,6 @@ class AutoTradeUI(QMainWindow):
             btn = self.findChild(QPushButton, name)
             if btn:
                 btn.setCheckable(True)
-
 
     def setup_holdings_table(self):
         self.holdings_table = self.findChild(QTableWidget, "holdings_table")
@@ -526,7 +521,6 @@ class AutoTradeUI(QMainWindow):
             }
         """)
 
-
     def set_buy_settings_to_ui(self, buy_data):
         self.buy_order_type_combo.setCurrentText(buy_data.get("order_type", "시장가"))
         self.buy_test_mode_checkbox.setChecked(buy_data.get("test_mode", False))
@@ -602,7 +596,6 @@ class AutoTradeUI(QMainWindow):
                 self.account_buttons[i].setChecked(False)
                 self.account_buttons[i].setStyleSheet(UNSELECTED_STYLE)
 
-
     @pyqtSlot()
     def start_realtime_updates(self):
         self.manager.start_realtime_updates()
@@ -618,7 +611,6 @@ class AutoTradeUI(QMainWindow):
         self.executor.reconstruct_sell_history_from_holdings()
         self.executor.reconstruct_pending_buys_from_unsettled()
     
-        
     @pyqtSlot()
     def login(self):
         log(self.log_box, "🔑 로그인 요청 중...")

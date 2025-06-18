@@ -1,7 +1,7 @@
 
 import os
 import json
-from utils import log
+from utils import log, SHOW_DEBUG  # utils에서 불러온다고 가정
 STRATEGY_FOLDER = "strategies"
 
 def save_current_strategy(strategy_name, buy_settings, sell_settings):
@@ -31,18 +31,20 @@ def load_strategy(strategy_name, log_box=None):
     path = os.path.join(STRATEGY_FOLDER, f"{strategy_name}.json")
     if not os.path.exists(path):
         msg = f"❌ 전략 파일이 존재하지 않습니다: {path}"
-        print(msg)
         if log_box:
             log(log_box, msg)
+        elif SHOW_DEBUG:
+            print(msg)
         return None
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     msg = f"📥 전략 '{strategy_name}' 로드 완료"
-    print(msg)
     if log_box:
         log(log_box, msg)
+    elif SHOW_DEBUG:
+        print(msg)
 
     return data
 

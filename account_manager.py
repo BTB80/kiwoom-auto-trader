@@ -67,7 +67,7 @@ class AccountManager:
     
     def handle_login_event(self, err_code):
         if err_code == 0:
-            log(self.log_box, "✅ 로그인 성공")
+            # log(self.log_box, "✅ 로그인 성공")
 
             acc_list = self.api.ocx.dynamicCall("GetLoginInfo(QString)", "ACCNO")
             accounts = acc_list.strip().split(";")[:-1]
