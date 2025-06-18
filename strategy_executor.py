@@ -47,8 +47,9 @@ class AutoTradeExecutor:
         else:
             self.current_strategy_name = "전략미지정"
 
-    def record_holding(self, code, account, price):
-        self.holdings.setdefault(code, {})[account] = {"buy_price": price, "qty": 1}
+    def record_holding(self, code, account, qty, price):
+        self.holdings.setdefault(code, {})[account] = {"buy_price": price, "qty": qty}
+
 
     def clear_holding(self, code, account):
         if code in self.holdings and account in self.holdings[code]:
@@ -185,6 +186,9 @@ class AutoTradeExecutor:
         if SHOW_DEBUG:
             log_debug(None, f"📤 매수주문 전송 → 계좌:{account} | 종목:{code} | 수량:{qty} | 유형:{order_type_ui} | "
                             f"{'테스트모드' if is_test else '실매매'} | 가격:{price} | 결과:{res}")
+                # ✅ 주문 전송 성공 시 임시 잔고 반영
+        if res == 0 and hasattr(self, "record_holding"):
+            self.record_holding(code, account, qty=qty, price=current_price)
 
         if hasattr(self, "account_manager"):
             if SHOW_DEBUG:
@@ -234,6 +238,13 @@ class AutoTradeExecutor:
             if qty <= 0:
                 log_debug(None, f"[📦 매도 불가: 수량 없음] {code} / 계좌: {account}")
                 continue
+            
+            # ✅ buy_price가 0 이하인 경우 매도 평가 생략
+            if buy_price <= 0:
+                log_debug(None, f"[⛔ 매도 평가 생략] {code} / 계좌:{account} / buy_price=0 이하")
+                continue
+            # ✅ 여기에 로그 추가
+            log_debug(None, f"[검사] 매도 평가 전 buy_price 확인: {code} / 계좌:{account} / qty:{qty} / buy_price:{buy_price} / current_price:{current_price}")
 
             target_rate = acc_conf.get("profit_rate", 0)
             target_price = buy_price * (1 + target_rate / 100)
@@ -360,6 +371,10 @@ class AutoTradeExecutor:
                 account_holdings[account_no] = {"buy_price": new_avg_price, "qty": new_qty}
             else:
                 account_holdings[account_no] = {"buy_price": price, "qty": qty}
+
+            # ✅ executor에도 반영
+            if hasattr(self, "executor"):
+                self.executor.record_holding(code, account_no, qty, price)
 
             if hasattr(self, "reconstruct_buy_history_from_holdings"):
                 self.reconstruct_buy_history_from_holdings()

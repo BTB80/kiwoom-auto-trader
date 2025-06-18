@@ -145,36 +145,10 @@ class AutoTradeUI(QMainWindow):
         super().__init__()
         uic.loadUi("ui/autotrade.ui", self)
 
-        
-        
-
-        # # 🔸 최초 실행 시 설정 없으면 설정창 강제 실행
-        # if not self.config.get("account1"):
-        #     self.open_config_dialog(first_time=True)
-        
-        # # 설정된 계좌 등록
-        # self.executor.set_accounts([
-        #     self.config.get("account1", ""),
-        #     self.config.get("account2", ""),
-        #     self.config.get("account3", ""),
-        #     self.config.get("account4", ""),
-        # ])
-
-
         # 전역 기본 폰트
         default_font = QFont("맑은 고딕", 8)
         self.setFont(default_font)
 
-        # 테이블 헤더 전용 폰트
-        font_header = QFont("맑은 고딕", 8)
-        for table in [self.holdings_table, self.stock_search_table, self.condition_table, self.unsettled_table,self.trade_log_table]:
-            table.horizontalHeader().setFont(font_header)
-
-        # 탭 제목 폰트
-        tab_font = QFont("맑은 고딕", 10)
-        self.account_tab.tabBar().setFont(tab_font)
-        self.watchlist_tabwidget.tabBar().setFont(tab_font)
-                    
         # ✅ 시계 라벨 생성
         self.clock_label = QLabel()
         self.clock_label.setStyleSheet(CLOCK_LABEL_STYLE)
@@ -187,30 +161,11 @@ class AutoTradeUI(QMainWindow):
         self.clock_timer.timeout.connect(self.update_clock)
         self.clock_timer.start(1000)
         
-       
-        self.trade_log_table = self.findChild(QTableWidget, "trade_log_table")
-        self.trade_log_table.setColumnCount(14)
-        self.trade_log_table.setHorizontalHeaderLabels([
-            "일자", "시간", "계좌", "종목코드", "종목명", "구분",
-            "수량", "가격", "체결금액", "수수료", "세금", "정산금액", "전략명", "비고"
-        ])
-        self.trade_log_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.trade_log_table.verticalHeader().setDefaultSectionSize(28)
-        
-        self.unsettled_table = self.findChild(QTableWidget, "unsettled_table")
-        self.unsettled_table.setColumnCount(7)
-        self.unsettled_table.setHorizontalHeaderLabels([
-            "주문번호", "종목명", "구분", "주문수량", "체결수량", "잔량", "가격"
-        ])
-        self.unsettled_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.unsettled_table.verticalHeader().setDefaultSectionSize(28)
-
         # ✅ 매수/매도 설정 박스 생성 및 삽입
         buy_box = create_buy_settings_groupbox()
         sell_box = create_sell_settings_groupbox()
         self.buy_settings_group.layout().addWidget(buy_box)
         self.sell_settings_group.layout().addWidget(sell_box)
-        
         
         self.max_holdings_input = self.findChild(QLineEdit, "max_holdings_input")
         self.max_holdings_input.setText("10")  # 기본값
@@ -218,22 +173,12 @@ class AutoTradeUI(QMainWindow):
         self.trade_stop_button = self.findChild(QPushButton, "trade_stop_button")
         self.schedule_enabled_button = self.findChild(QPushButton, "schedule_enabled_button")
         self.schedule_button = self.findChild(QPushButton, "schedule_button")
-        if self.schedule_button:
-            self.schedule_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
-            self.schedule_button.clicked.connect(self.open_schedule_settings)
-
         self.config_button = self.findChild(QPushButton, "config_button")
-        if self.config_button:
-            self.config_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
-            self.config_button.clicked.connect(lambda: self.open_config_dialog(first_time=False))
+            
 
         for btn in [self.login_button, self.trade_start_button, self.trade_stop_button]:
             btn.setStyleSheet(UNIFORM_BUTTON_STYLE)
         
-        self.schedule_enabled_button.toggled.connect(self.on_schedule_toggle)
-
-        self.trade_start_button.clicked.connect(self.handle_trade_start)
-        self.trade_stop_button.clicked.connect(self.handle_trade_stop)
 
         # ✅ 전략 위젯 요소 연결
         self.strategy_dropdown = self.findChild(QComboBox, "strategy_dropdown")
@@ -242,20 +187,15 @@ class AutoTradeUI(QMainWindow):
         self.strategy_save_button = self.findChild(QPushButton, "strategy_save_button")
         self.strategy_delete_button = self.findChild(QPushButton, "strategy_delete_button")        
         self.load_existing_strategies()
-
-        self.condition_auto_buy_checkbox = self.findChild(QPushButton, "condition_auto_buy_checkbox")
-        self.condition_auto_buy_checkbox.setCheckable(True)
-        self.condition_auto_buy_checkbox.toggled.connect(self.toggle_condition_auto_buy)
+        self.condition_auto_buy_checkbox = self.findChild(QPushButton, "condition_auto_buy_checkbox")  
         self.schedule_dropdown_main = self.findChild(QComboBox, "schedule_dropdown_main")
         
         # ✅ 전략 위젯 시그널 연결
-        self.strategy_save_button.clicked.connect(self.handle_save_strategy)
-        self.strategy_delete_button.clicked.connect(self.handle_delete_strategy)
-        self.strategy_dropdown.currentTextChanged.connect(self.handle_strategy_selected)
+
         
         # ✅ 전체잔고보기 버튼
         self.view_all_holdings_button = self.findChild(QPushButton, "view_all_holdings_button")
-        self.view_all_holdings_button.clicked.connect(self.show_all_holdings_popup)
+
         
         # ✅ 시계창
         self.topBar.addWidget(self.clock_label)  
@@ -265,12 +205,6 @@ class AutoTradeUI(QMainWindow):
         self.schedule_timer.start(1000 * 30)  # 30초마다 확인
         
         # ✅ 테이블 설정
-        self.stock_search_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.stock_search_table.verticalHeader().setDefaultSectionSize(30)
-        self.holdings_table.verticalHeader().setDefaultSectionSize(30)
-        self.stock_search_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.holdings_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.log_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # 탭 위젯 연결
@@ -278,21 +212,14 @@ class AutoTradeUI(QMainWindow):
         self.watchlist_tabwidget = self.findChild(QTabWidget, "watchlist_tabwidget")
 
         # 스타일 일괄 적용
+        tab_font = QFont("맑은 고딕", 10)
         for tab in [self.account_tab, self.watchlist_tabwidget]:
             if tab:
                 tab.setStyleSheet(TAB_STYLE)
-
-        # ✅ 테이블 컬럼 정의
-        self.holdings_table.setColumnCount(9)
-        self.holdings_table.setHorizontalHeaderLabels(["종목명", "보유수량", "매입가", "현재가", "목표단가", "수익률(%)",  "매입금액", "평가금액", "평가손익"
-        ])
-        self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        self.stock_search_table.setColumnCount(7)
-        self.stock_search_table.setHorizontalHeaderLabels(
-            ["종목코드", "종목명", "전일종가", "현재가", "등락률", "상태", "매수"]
-        )
-        self.stock_search_table.setEditTriggers(QTableWidget.NoEditTriggers)
+                
+        self.account_tab.tabBar().setFont(tab_font)
+        self.watchlist_tabwidget.tabBar().setFont(tab_font)
+        
         
         self.config = load_user_config()
         update_debug_flags(self.config) 
@@ -305,25 +232,18 @@ class AutoTradeUI(QMainWindow):
         chat_id = self.config.get("telegram_chat_id", "")
         if token and chat_id:
             configure_telegram(token, chat_id)
-            
-        self.api = KiwoomAPI()
-        self.basic_info_map = {}
-        # self.manager = AccountManager(self.api)
-        
-        self.manager = AccountManager(self.api, self.config)
-        self.manager.ui = self
-        
-        self.executor = AutoTradeExecutor(self.api)
-        self.executor.set_manager(self.manager) 
-        self.executor.set_basic_info_map(self.basic_info_map)
-        
-        self.manager.set_executor(self.executor)
-        
-        
+
+        self.setup_core_objects()
+        self.setup_stock_search_table() 
+        self.setup_holdings_table()
+        self.setup_condition_table()
+        self.setup_unsettled_table()
+        self.setup_trade_log_table()
+
+        self.setup_table_fonts()
         
         # ✅ 실시간 종목 감시용 목록
         self.watchlist = []
-        self.basic_info_map = {}
 
         # ✅ UI 요소 연결 이후에 set_ui_elements 호출
         self.manager.set_ui_elements(
@@ -337,7 +257,7 @@ class AutoTradeUI(QMainWindow):
         
         # ✅ 관심종목 테이블 연결 추가
         self.manager.stock_search_table = self.stock_search_table
-        self.manager.basic_info_map = self.basic_info_map
+        
 
         # ✅ log_box가 준비된 이후에 ConditionManager 초기화
         
@@ -346,8 +266,7 @@ class AutoTradeUI(QMainWindow):
         
 
         # ✅ 조건검색 결과 시그널 연결
-        self.api.ocx.OnReceiveTrCondition.connect(self.on_receive_tr_condition)
-        self.api.ocx.OnReceiveRealCondition.connect(self.on_receive_real_condition)
+        
         
         # ✅ 로그 기록 위젯 지정
         log_trade.log_widget = self.log_box
@@ -356,10 +275,10 @@ class AutoTradeUI(QMainWindow):
         self.api.ocx.OnEventConnect.connect(self.on_login_event)
         self.api.ocx.OnReceiveTrData.connect(self.handle_tr_data)
         self.api.ocx.OnReceiveRealData.connect(self.on_real_data)
-        self.login_button.clicked.connect(self.login)
-        self.account_combo.currentTextChanged.connect(self.manager.request_deposit_info)
+
+        
         self.watchlist_button = self.findChild(QPushButton, "watchlist_button")
-        self.watchlist_button.clicked.connect(self.load_watchlist_from_google)
+        
 
         # ✅ 매수/매도 위젯 연결
         self.buy_order_type_combo = buy_box.findChild(QComboBox, "buy_order_type_combo")
@@ -375,7 +294,7 @@ class AutoTradeUI(QMainWindow):
         
         self.setup_account_buttons()
         self.setup_table_styles()
-        self.account_combo.currentTextChanged.connect(self.handle_account_selected)
+        
         
         # 레이아웃 stretch 설정
         self.topBar = self.findChild(QHBoxLayout, "topBar")
@@ -408,7 +327,6 @@ class AutoTradeUI(QMainWindow):
             sell_settings_group.setStyleSheet(GROUPBOX_STYLE)
             
         # 관심종목 및 조건검색 테이블 연결
-        self.stock_search_table = self.findChild(QTableWidget, "stock_search_table")
 
         watchlist_label = self.findChild(QLabel, "watchlist_label")
         if watchlist_label:
@@ -445,19 +363,12 @@ class AutoTradeUI(QMainWindow):
             account_tab.setTabText(1, "📦 미체결")
             account_tab.setTabText(2, "🧾 매매내역")
         
-        self.api.ocx.OnReceiveConditionVer.connect(self.on_condition_loaded)
+        
         
         self.condition_dropdown = self.findChild(QComboBox, "condition_dropdown")
         self.condition_search_button = self.findChild(QPushButton, "condition_search_button")
-        if self.condition_search_button:
-            self.condition_search_button.clicked.connect(self.handle_condition_search)
-        self.condition_table = self.findChild(QTableWidget, "condition_table")
-        self.condition_table.setColumnCount(7)
-        self.condition_table.setHorizontalHeaderLabels([
-            "종목코드", "종목명", "전일종가", "현재가", "등락률", "조건식명", "매수"
-        ])
-        self.condition_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.condition_table.verticalHeader().setDefaultSectionSize(28)
+        
+
         self.is_fullscreen = False
         # 로그 VBox 마진 조정
         log_container = self.log_label.parentWidget()
@@ -469,30 +380,183 @@ class AutoTradeUI(QMainWindow):
         self.log_box = self.findChild(QTextEdit, "log_box")
         self.setup_menu_actions()
         self.refresh_schedule_dropdown_main()
-        self.schedule_dropdown_main.currentTextChanged.connect(self.load_selected_schedule)
-        self.manager.on_login_complete = self.on_login_complete
         
-    def set_buy_settings_to_ui(self, buy_data):
-        self.buy_order_type_combo.setCurrentText(buy_data.get("order_type", "시장가"))
-        self.buy_test_mode_checkbox.setChecked(buy_data.get("test_mode", False))
+        self.manager.on_login_complete = self.on_login_complete
+        self.connect_signals()
+        
+    def setup_core_objects(self):
+        self.api = KiwoomAPI()
+        self.basic_info_map = {}
 
-        for i, acc in enumerate(["계좌1", "계좌2", "계좌3", "계좌4"]):
-            acc_data = buy_data["accounts"].get(acc, {})
-            self.buy_account_buttons[i].setChecked(acc_data.get("enabled", False))
-            amount = int(acc_data.get("amount", 0))
-            self.buy_amount_inputs[i].setText(f"{amount:,}")
-            self.buy_drop_inputs[i].setText(str(acc_data.get("drop_rate", 0.0)))
+        self.manager = AccountManager(self.api, self.config)
+        self.manager.ui = self
 
-    def set_sell_settings_to_ui(self, sell_data):
-        self.sell_order_type_combo.setCurrentText(sell_data.get("order_type", "시장가"))
+        self.executor = AutoTradeExecutor(self.api)
+        self.executor.set_manager(self.manager)
+        self.executor.set_basic_info_map(self.basic_info_map)
 
-        for i, acc in enumerate(["계좌1", "계좌2", "계좌3", "계좌4"]):
-            acc_data = sell_data["accounts"].get(acc, {})
-            self.sell_account_buttons[i].setChecked(acc_data.get("enabled", False))
-            self.sell_ratio_inputs[i].setText(str(acc_data.get("ratio", 0)))
-            self.sell_profit_inputs[i].setText(str(acc_data.get("profit_rate", 0.0)))      
-            
-            
+        self.manager.set_executor(self.executor)
+        self.manager.basic_info_map = self.basic_info_map
+        
+    def connect_signals(self):
+        self.login_button.clicked.connect(self.login)
+        self.trade_start_button.clicked.connect(self.handle_trade_start)
+        self.trade_stop_button.clicked.connect(self.handle_trade_stop)
+        self.view_all_holdings_button.clicked.connect(self.show_all_holdings_popup)
+        self.watchlist_button.clicked.connect(self.load_watchlist_from_google)
+
+        if self.schedule_button:
+            self.schedule_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
+            self.schedule_button.clicked.connect(self.open_schedule_settings)
+
+        if self.config_button:
+            self.config_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
+            self.config_button.clicked.connect(lambda: self.open_config_dialog(first_time=False))
+
+        self.schedule_enabled_button.setCheckable(True)
+        self.schedule_enabled_button.toggled.connect(self.on_schedule_toggle)
+
+        if self.condition_search_button:
+            self.condition_search_button.clicked.connect(self.handle_condition_search)
+
+        self.condition_auto_buy_checkbox.setCheckable(True)
+        self.condition_auto_buy_checkbox.toggled.connect(self.toggle_condition_auto_buy)
+
+        self.schedule_dropdown_main.currentTextChanged.connect(self.load_selected_schedule)
+        self.strategy_save_button.clicked.connect(self.handle_save_strategy)
+        self.strategy_delete_button.clicked.connect(self.handle_delete_strategy)
+        self.strategy_dropdown.currentTextChanged.connect(self.handle_strategy_selected)
+
+        self.account_combo.currentTextChanged.connect(self.manager.request_deposit_info)
+        self.account_combo.currentTextChanged.connect(self.handle_account_selected)
+
+        self.api.ocx.OnReceiveTrCondition.connect(self.on_receive_tr_condition)
+        self.api.ocx.OnReceiveRealCondition.connect(self.on_receive_real_condition)
+        self.api.ocx.OnReceiveConditionVer.connect(self.on_condition_loaded)
+
+    def setup_buttons(self):
+        # 일반 버튼들: 스타일 + 클릭 연결
+        button_defs = [
+            ("config_button", self.open_config_dialog, False),
+            ("schedule_button", self.open_schedule_settings),
+            ("login_button", self.login),
+            ("trade_start_button", self.handle_trade_start),
+            ("trade_stop_button", self.handle_trade_stop),
+            ("view_all_holdings_button", self.show_all_holdings_popup),
+            ("watchlist_button", self.load_watchlist_from_google),
+            ("strategy_save_button", self.handle_save_strategy),
+            ("strategy_delete_button", self.handle_delete_strategy),
+            ("condition_search_button", self.handle_condition_search),
+        ]
+
+        for name, slot, *rest in button_defs:
+            btn = self.findChild(QPushButton, name)
+            if btn:
+                btn.setStyleSheet(UNIFORM_BUTTON_STYLE)
+                if name == "config_button":
+                    btn.clicked.connect(lambda _, s=slot: s(first_time=False))
+                elif slot:
+                    btn.clicked.connect(slot)
+
+        # 체크 가능한 버튼: 체크 상태 + 토글 시그널
+        toggle_defs = [
+            ("schedule_enabled_button", self.on_schedule_toggle),
+            ("condition_auto_buy_checkbox", self.toggle_condition_auto_buy)
+        ]
+        for name, slot in toggle_defs:
+            btn = self.findChild(QPushButton, name)
+            if btn:
+                btn.setCheckable(True)
+                btn.toggled.connect(slot)
+
+    def setup_holdings_table(self):
+        self.holdings_table = self.findChild(QTableWidget, "holdings_table")
+        if self.holdings_table:
+            self.holdings_table.setColumnCount(9)
+            self.holdings_table.setHorizontalHeaderLabels([
+                "종목명", "보유수량", "매입가", "현재가", "목표단가",
+                "수익률(%)", "매입금액", "평가금액", "평가손익"
+            ])
+            self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.holdings_table.verticalHeader().setDefaultSectionSize(30)
+            self.holdings_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+            self.manager.holdings_table = self.holdings_table
+        else:
+            log(self.log_box, "❌ 'holdings_table' 위젯을 찾을 수 없습니다.")
+
+    def setup_stock_search_table(self):
+        self.stock_search_table = self.findChild(QTableWidget, "stock_search_table")
+        if self.stock_search_table:
+            self.stock_search_table.setColumnCount(7)
+            self.stock_search_table.setHorizontalHeaderLabels([
+                "종목코드", "종목명", "전일종가", "현재가", "등락률", "상태", "매수"
+            ])
+            self.stock_search_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            self.stock_search_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.stock_search_table.verticalHeader().setDefaultSectionSize(30)
+            self.stock_search_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+            self.manager.stock_search_table = self.stock_search_table
+        else:
+            log(self.log_box, "❌ 'stock_search_table' 위젯을 찾을 수 없습니다.")
+
+    def setup_condition_table(self):
+        self.condition_table = self.findChild(QTableWidget, "condition_table")
+        if self.condition_table:
+            self.condition_table.setColumnCount(7)
+            self.condition_table.setHorizontalHeaderLabels([
+                "종목코드", "종목명", "전일종가", "현재가", "등락률", "조건식명", "매수"
+            ])
+            self.condition_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            self.condition_table.verticalHeader().setDefaultSectionSize(28)
+
+            self.manager.condition_table = self.condition_table  # 필요시
+        else:
+            log(self.log_box, "❌ 'condition_table' 위젯을 찾을 수 없습니다.")
+   
+    def setup_unsettled_table(self):
+        self.unsettled_table = self.findChild(QTableWidget, "unsettled_table")
+        if self.unsettled_table:
+            self.unsettled_table.setColumnCount(7)
+            self.unsettled_table.setHorizontalHeaderLabels([
+                "주문번호", "종목명", "구분", "주문수량", "체결수량", "잔량", "가격"
+            ])
+            self.unsettled_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            self.unsettled_table.verticalHeader().setDefaultSectionSize(28)
+
+            self.manager.unsettled_table = self.unsettled_table  # 필요시
+        else:
+            log(self.log_box, "❌ 'unsettled_table' 위젯을 찾을 수 없습니다.")
+
+    def setup_trade_log_table(self):
+        self.trade_log_table = self.findChild(QTableWidget, "trade_log_table")
+        if self.trade_log_table:
+            self.trade_log_table.setColumnCount(14)
+            self.trade_log_table.setHorizontalHeaderLabels([
+                "일자", "시간", "계좌", "종목코드", "종목명", "구분",
+                "수량", "가격", "체결금액", "수수료", "세금", "정산금액", "전략명", "비고"
+            ])
+            self.trade_log_table.setEditTriggers(QTableWidget.NoEditTriggers)
+            self.trade_log_table.verticalHeader().setDefaultSectionSize(28)
+
+            self.manager.trade_log_table = self.trade_log_table  # 필요시
+        else:
+            log(self.log_box, "❌ 'trade_log_table' 위젯을 찾을 수 없습니다.")
+
+    def setup_table_fonts(self):
+        font_header = QFont("맑은 고딕", 8)
+        for table in [
+            self.holdings_table,
+            self.stock_search_table,
+            self.condition_table,
+            self.unsettled_table,
+            self.trade_log_table
+        ]:
+            if table:
+                table.horizontalHeader().setFont(font_header)
+                
     def setup_table_styles(self):
         font_header = QFont("맑은 고딕", 9)     # 헤더: 굵고 크게
         font_body = QFont("맑은 고딕", 10)                  # 본문: 일반 크기
@@ -526,6 +590,30 @@ class AutoTradeUI(QMainWindow):
                 font-size: 12px;
             }
         """)
+
+
+    def set_buy_settings_to_ui(self, buy_data):
+        self.buy_order_type_combo.setCurrentText(buy_data.get("order_type", "시장가"))
+        self.buy_test_mode_checkbox.setChecked(buy_data.get("test_mode", False))
+
+        for i, acc in enumerate(["계좌1", "계좌2", "계좌3", "계좌4"]):
+            acc_data = buy_data["accounts"].get(acc, {})
+            self.buy_account_buttons[i].setChecked(acc_data.get("enabled", False))
+            amount = int(acc_data.get("amount", 0))
+            self.buy_amount_inputs[i].setText(f"{amount:,}")
+            self.buy_drop_inputs[i].setText(str(acc_data.get("drop_rate", 0.0)))
+
+    def set_sell_settings_to_ui(self, sell_data):
+        self.sell_order_type_combo.setCurrentText(sell_data.get("order_type", "시장가"))
+
+        for i, acc in enumerate(["계좌1", "계좌2", "계좌3", "계좌4"]):
+            acc_data = sell_data["accounts"].get(acc, {})
+            self.sell_account_buttons[i].setChecked(acc_data.get("enabled", False))
+            self.sell_ratio_inputs[i].setText(str(acc_data.get("ratio", 0)))
+            self.sell_profit_inputs[i].setText(str(acc_data.get("profit_rate", 0.0)))      
+            
+            
+    
         
     def setup_account_buttons(self):
         self.account_buttons = [
