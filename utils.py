@@ -62,8 +62,17 @@ def aligned_item(text, align="right"):
 
 
 def write_trade_log_file(message):
+    from datetime import datetime
+    import os
+
     os.makedirs("logs", exist_ok=True)
-    now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filepath = os.path.join("logs", "trade_history.log")
+    
+    # 오늘 날짜 기반 파일명
+    today_str = datetime.now().strftime("%Y%m%d")
+    filename = f"trade_{today_str}.log"
+    filepath = os.path.join("logs", filename)
+    
+    # 로그 작성 (날짜 + 시간 포함)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(filepath, "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n")
+        f.write(f"[{timestamp}] {message}\n")

@@ -27,6 +27,8 @@ class AutoTradeExecutor:
         self.pending_buys = set()
         self.enabled = False
         self.basic_info_map = {} 
+        self.test_mode = False
+        self.condition_auto_buy = False
 
     def set_accounts(self, accounts):
         self.accounts = accounts
@@ -62,139 +64,98 @@ class AutoTradeExecutor:
         if 1 <= step <= len(self.accounts):
             return self.accounts[step - 1]
         return ""
-
     def evaluate_buy(self, code, current_price):
         if not self.enabled:
+            log_debug(None, f"[⏸ 매수 평가 중단] 자동매매 비활성화 상태")
             return
 
         if code.startswith("A"):
             code = code[1:]
 
-        # holdings가 비었으면 종료
-        if not self.holdings:
-            self.log_once(f"[🛑 holdings 비어있음] {code} → 매수 평가 생략")
+        if SHOW_VERBOSE_BUY_EVAL:
+            log_debug(None, f"[👁 매수평가 진입] {code} / 현재가: {current_price}")
+
+        # ✅ 계좌 1~4 순서대로 평가
+        for step in range(1, 5):
+            account_no = self.get_account_by_step(step)
+            acc_conf = self.buy_settings["accounts"].get(f"계좌{step}", {})
+            if not self.can_buy(code, account_no, acc_conf, step, current_price):
+                continue
+
+            amount = acc_conf.get("amount", 0)
+            order_type = self.buy_settings.get("order_type", "시장가")
+            self.send_buy_order(code, account_no, current_price, amount, order_type, step)
+            break  # ✅ 한 계좌만 매수 후 종료 (다중매수 방지)
+        
+        
+    def can_buy(self, code, account_no, acc_conf, step, current_price):
+        if (code, account_no) in self.pending_buys:
+            self.log_once(f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
+            return False
+
+        if self.holdings.get(code, {}).get(account_no, {}).get("qty", 0) > 0:
+            self.log_once(f"[⛔ 중복보유] {code}는 계좌 {account_no}에서 이미 보유 중 → 생략")
+            return False
+
+        if not acc_conf.get("enabled", False):
+            self.log_once(f"[⚠️ 비활성] 계좌 {account_no} 매수 비활성화됨 → 생략")
+            return False
+
+        drop_rate = acc_conf.get("drop_rate", 0)
+
+        # ✅ 선행 매수 가격 가져오기 (계좌1은 기준가를 prev_price = 전일종가 사용)
+        if step == 1:
+            prev_price = self.get_previous_close(code)
+        else:
+            prev_account = self.get_account_by_step(step - 1)
+            prev_price = self.buy_history.get((code, prev_account), {}).get("price")
+
+        if prev_price and current_price > 0:
+            rate = (prev_price - current_price) / prev_price * 100
+            if rate < drop_rate:
+                self.log_once(f"[⏬ 하락률 미달] {code} 현재: {current_price}, 기준대비 {rate:.2f}% < {drop_rate}% → 생략")
+                return False
+        else:
+            self.log_once(f"[❌ 기준 가격 없음] {code} → 생략")
+            return False
+
+        return True
+
+    
+    
+    def send_buy_order(self, code, account_no, current_price, amount, order_type, step):
+        if amount <= 0 or current_price <= 0:
+            self.log_once(f"[❌ 매수불가] 잘못된 금액 또는 가격 ({amount} / {current_price})")
             return
 
-        accounts = self.buy_settings.get("accounts", {})
-
-        for i, acc in enumerate(["계좌1", "계좌2", "계좌3", "계좌4"]):
-            step = i + 1
-            account_no = self.get_account_by_step(step)
-            acc_conf = accounts.get(acc)
-
-            if not acc_conf or not acc_conf.get("enabled"):
-                continue
-
-            # ✅ 이미 보유 중이면 생략
-            if self.holdings.get(code, {}).get(account_no, {}).get("qty", 0) > 0:
-                self.log_once(f"[⛔ 중복보유] {code}는 계좌 {account_no}에서 이미 보유 중 → 생략")
-                continue
-
-            # ✅ 이미 pending 상태면 생략
-            if (code, account_no) in self.pending_buys:
-                self.log_once(f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
-                continue
-
-            # ✅ 조건 체크 전 pending_buys 선등록 (중복 방지 강화)
+        if self.test_mode:
+            qty = 1
+            price = 0 if order_type == "시장가" else current_price
+            self.api.send_order(f"매수_TEST_{code}", "1000", account_no, 1, code, qty, price, order_type, "")
             self.pending_buys.add((code, account_no))
+            self.log_once(f"[🧪 1주 매수 테스트] {code} / 계좌: {account_no}")
+            return
 
-            if step == 1:
-                # ✅ 계좌1: 종목 수 제한 및 재매수 제한
-                max_holdings = 10
-                if hasattr(self, "manager") and hasattr(self.manager, "ui"):
-                    try:
-                        max_holdings = int(self.manager.ui.max_holdings_input.text())
-                    except:
-                        pass
+        qty = int(amount / current_price)
+        if qty <= 0:
+            self.log_once(f"[❌ 매수불가] 금액 {amount}으로 매수 수량 부족 → 생략")
+            return
 
-                current_holdings = [
-                    c for c, acc_map in self.holdings.items()
-                    if acc_map.get(account_no, {}).get("qty", 0) > 0
-                ]
-                if len(current_holdings) >= max_holdings:
-                    self.log_once(f"[⛔ 계좌1 종목수 제한] {len(current_holdings)}개 보유 중 → 생략")
-                    self.pending_buys.discard((code, account_no))
-                    continue
+        price = 0 if order_type == "시장가" else current_price
+        screen_no = self.get_screen_no_by_account(account_no)
+        order_id = f"매수_{code}_{account_no}_{step}"
 
-                if code in self.sell_history:
-                    self.log_once(f"[⏸ 계좌1 재매수 제한] {code} / 매도 이력 있음 → 생략")
-                    self.pending_buys.discard((code, account_no))
-                    continue
+        self.api.send_order(order_id, screen_no, account_no, 1, code, qty, price, order_type, "")
+        self.pending_buys.add((code, account_no))
 
-                base_price = self.get_previous_close(code)
+        self.log_once(f"[📤 매수주문 전송] {code} / 계좌: {account_no} / 수량: {qty} / 가격: {price} / 방식: {order_type}")
 
-            else:
-                # ✅ 계좌2~4: 전 계좌 보유 여부 확인
-                prev_account = self.get_account_by_step(step - 1)
-                prev_holding = self.holdings.get(code, {}).get(prev_account)
-
-                if prev_holding and prev_holding.get("qty", 0) > 0:
-                    base_price = prev_holding.get("buy_price", current_price)
-                    self.log_once(f"[✅ 계좌{step} 조건충족] 전계좌({prev_account}) 보유 중 → 기준가={base_price}")
-                else:
-                    self.log_once(f"[⛔ 계좌{step} 조건불충족] 전계좌({prev_account}) 미보유 → 평가 생략")
-                    self.pending_buys.discard((code, account_no))
-                    continue
-
-            # 🎯 가격 조건 비교
-            drop_rate = acc_conf.get("drop_rate", 0)
-            target_price = base_price * (1 + drop_rate / 100)
-
-            if SHOW_VERBOSE_BUY_EVAL:
-                self.log_once(f"[⚙️ 평가] {code} | step={step} | 계좌={account_no} | 현재가={current_price} | 기준가={base_price} | 목표가={target_price:.2f}")
-
-            if current_price <= target_price:
-                amount = acc_conf.get("amount", 0)
-                log_info(None, f"[✅ 매수 조건 만족] {code} / 계좌={account_no} / 금액: {amount}")
-                self.send_buy_order(code, amount, step, current_price)
-            else:
-                self.log_once(f"[❌ 조건 미충족] {code} / 현재가={current_price} > 목표가={target_price:.2f}")
-                self.pending_buys.discard((code, account_no))  # 조건 불충족 → 제거
-
-
-
-
-    def send_buy_order(self, code, amount, step, current_price):
-        account = self.get_account_by_step(step)
-        is_test = self.buy_settings.get("test_mode", False)
-
-        # ✅ 전략에서 주문 방식 가져오기
-        order_type_ui = self.buy_settings.get("order_type", "지정가")
-        if order_type_ui == "시장가":
-            order_type = 2
-            hoga_type = "03"
-            price = 0  # 시장가 주문은 가격 0
-        else:
-            order_type = 1
-            hoga_type = "00"
-            price = int(current_price)
-
-        qty = 1 if is_test else max(int(float(amount) // float(current_price)), 1)
-
-        res = self.api.send_order(
-            rqname="매수",
-            screen_no="0101",
-            acc_no=account,
-            order_type=order_type,
-            code=code,
-            qty=qty,
-            price=price,
-            hoga=hoga_type,
-            org_order_no=""
-        )
-
-        if SHOW_DEBUG:
-            log_debug(None, f"📤 매수주문 전송 → 계좌:{account} | 종목:{code} | 수량:{qty} | 유형:{order_type_ui} | "
-                            f"{'테스트모드' if is_test else '실매매'} | 가격:{price} | 결과:{res}")
-                # ✅ 주문 전송 성공 시 임시 잔고 반영
-        if res == 0 and hasattr(self, "record_holding"):
-            self.record_holding(code, account, qty=qty, price=current_price)
-
-        if hasattr(self, "account_manager"):
-            if SHOW_DEBUG:
-                log_debug(None, f"🔄 매수 후 잔고 갱신 요청 → 계좌: {account}")
-            self.account_manager.request_holdings(account)
-
+        # 기록용 정보 저장
+        self.buy_history[(code, account_no)] = {
+            "step": step,
+            "price": current_price,
+            "strategy": self.current_strategy_name
+        }
 
 
     def evaluate_sell(self, code, current_price):

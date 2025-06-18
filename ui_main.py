@@ -328,13 +328,17 @@ class AutoTradeUI(QMainWindow):
 
         self.manager.set_executor(self.executor)
         self.manager.basic_info_map = self.basic_info_map
-        
-         # ✅ 여기에서 컨트롤러 초기화
+
+        # ✅ 컨트롤러 초기화
         from modules.watchlist_controller import WatchlistController
         from modules.condition_controller import ConditionSearchController
 
         self.watchlist_controller = WatchlistController(self, self.api, lambda msg: log(self.log_box, msg))
         self.condition_controller = ConditionSearchController(self, self.api, lambda msg: log(self.log_box, msg))
+
+        # ✅ 실시간 조건검색 이벤트 연결
+        self.api.ocx.OnReceiveRealCondition.connect(self.condition_controller.on_receive_real_condition)
+
         
     def connect_signals(self):
         self.login_button.clicked.connect(self.login)
@@ -677,8 +681,11 @@ class AutoTradeUI(QMainWindow):
             QMessageBox.warning(self, "❌ 전략 없음", "자동매매를 시작하기 전에 전략을 선택하세요.")
             return
 
-        # ✅ 명시적으로 전략 적용
-        self.handle_strategy_selected(selected_strategy)
+        # ✅ 이미 같은 전략이 적용되어 있다면 중복 적용 방지
+        if hasattr(self.executor, "current_strategy_name") and self.executor.current_strategy_name == selected_strategy:
+            log(self.log_box, f"⚠️ 전략 '{selected_strategy}'은 이미 적용되어 있습니다.")
+        else:
+            self.handle_strategy_selected(selected_strategy)
 
         if not self.executor.buy_settings.get("accounts"):
             QMessageBox.warning(self, "⚠️ 전략 설정 없음", "선택한 전략에 매수 조건이 없습니다.")
@@ -686,29 +693,38 @@ class AutoTradeUI(QMainWindow):
 
         log(self.log_box, "✅ 자동매매 준비 중 → 상태 복원 중...")
 
+        # ✅ 체결 대기 상태 초기화
+        log(self.log_box, f"🧹 pending_buys 초기화 전: {len(self.executor.pending_buys)}건")
+        self.executor.pending_buys.clear()
+        log(self.log_box, "🧹 체결대기 종목 초기화 완료")
+
+        # ✅ 보유 상태 복원
         self.executor.holdings = self.manager.holdings
         self.executor.reconstruct_buy_history_from_holdings()
         self.executor.reconstruct_sell_history_from_holdings()
         log(self.log_box, "🔁 매수/매도 단계 자동 복원 완료")
 
-        self.executor.enabled = False
+        # ✅ 전략명 누락 방지
+        if not hasattr(self.executor, "current_strategy_name") or self.executor.current_strategy_name == "전략미지정":
+            log(self.log_box, "❗ 전략명이 적용되지 않았습니다. 전략을 다시 선택해 주세요.")
+            return
 
-        if len(self.executor.accounts) > 1:
-            self.handle_account_button_clicked(1)
-            QTimer.singleShot(1000, lambda: self.handle_account_button_clicked(0))
+        # ✅ 계좌가 하나 이상 있다면 명시적으로 첫 계좌 선택
+        if self.executor.accounts:
+            first_account = self.executor.accounts[0]
+            self.account_combo.setCurrentText(first_account)  # 콤보박스 변경 → 잔고 로딩 유도
+            self.manager.current_account = first_account
 
-        QTimer.singleShot(7000, self.enable_auto_trade)
+        # ✅ 자동매매 즉시 활성화
+        self.executor.enabled = True
+        log(self.log_box, "✅ 자동매매 즉시 활성화 완료")
+
 
 
     def enable_auto_trade(self):
         self.executor.enabled = True
         log(self.log_box, "✅ 자동매매 활성화 완료 (보유 종목 복원 이후)")
 
-
-    def stop_auto_trade(self):
-        self.executor.enabled = False
-        log(self.log_box, "🛑 자동매매 종료")
-        
     def handle_trade_start(self):
         if not getattr(self.manager, "holdings_loaded", False):
             log(self.log_box, "❌ 매매 시작 실패: 잔고 수신이 아직 완료되지 않았습니다.")
@@ -719,7 +735,10 @@ class AutoTradeUI(QMainWindow):
         self.trade_start_button.setStyleSheet(UNIFORM_BUTTON_STYLE + TRADING_STYLE)
         self.trade_stop_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
         
-
+    def stop_auto_trade(self):
+        self.executor.enabled = False
+        log(self.log_box, "🛑 자동매매 종료")
+        
     def handle_trade_stop(self):
         self.stop_auto_trade()  # ✅ 기존 로직 호출
         self.trade_start_button .setText("매매 시작")
@@ -878,8 +897,10 @@ class AutoTradeUI(QMainWindow):
         # ✅ executor가 존재할 때만 설정 업데이트
         if hasattr(self, "executor") and self.executor:
             self.executor.update_settings(strategy)
+            self.executor.test_mode = strategy.get("buy", {}).get("test_mode", False)  # ✅ 추가
         else:
             log(self.log_box, "⚠️ 자동매매 실행기가 아직 초기화되지 않았습니다.")
+
 
     def handle_save_strategy(self):
         strategy_name = self.strategy_name_input.text().strip()
@@ -930,6 +951,7 @@ class AutoTradeUI(QMainWindow):
                 "buy": buy_settings,
                 "sell": sell_settings
             })
+            self.executor.test_mode = buy_settings.get("test_mode", False)
             log(self.log_box, f"🔁 전략 '{strategy_name}' 자동매매에 즉시 반영됨")
             
     def load_existing_strategies(self):
@@ -1046,39 +1068,39 @@ class AutoTradeUI(QMainWindow):
 
                 break  # ✅ 현재 구간만 실행
 
-    def on_receive_real_condition(self, screen_no, code, event_type, condition_name):
-        if event_type != "I":
-            return
+    # def on_receive_real_condition(self, screen_no, code, event_type, condition_name):
+    #     if event_type != "I":
+    #         return
 
-        if not self.condition_auto_buy_checkbox.isChecked():
-            return
+    #     if not self.condition_auto_buy_checkbox.isChecked():
+    #         return
 
-        # 종목 정보 확보
-        name = self.api.get_master_code_name(code)
-        price = self.api.get_master_last_price(code)
+    #     # 종목 정보 확보
+    #     name = self.api.get_master_code_name(code)
+    #     price = self.api.get_master_last_price(code)
 
-        # 계좌1 설정 확인
-        step = 1
-        account = self.executor.get_account_by_step(step)
-        buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
-        amount = buy_conf.get("amount", 0)
-        enabled = buy_conf.get("enabled", False)
+    #     # 계좌1 설정 확인
+    #     step = 1
+    #     account = self.executor.get_account_by_step(step)
+    #     buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
+    #     amount = buy_conf.get("amount", 0)
+    #     enabled = buy_conf.get("enabled", False)
 
-        if not enabled or amount <= 0:
-            return
+    #     if not enabled or amount <= 0:
+    #         return
 
-        # 중복 매수 방지
-        if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
-            log(self.log_box, f"[조건매수 스킵] {code}: 이미 계좌1에서 보유 중")
-            return
-        if (code, account) in self.executor.pending_buys:
-            log(self.log_box, f"[조건매수 스킵] {code}: 체결 대기 중")
-            return
+    #     # 중복 매수 방지
+    #     if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
+    #         log(self.log_box, f"[조건매수 스킵] {code}: 이미 계좌1에서 보유 중")
+    #         return
+    #     if (code, account) in self.executor.pending_buys:
+    #         log(self.log_box, f"[조건매수 스킵] {code}: 체결 대기 중")
+    #         return
 
-        # 매수 실행
-        log(self.log_box, f"[조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
-        self.executor.send_buy_order(code, amount, step=step, current_price=price)
-        self.executor.pending_buys.add((code, account))
+    #     # 매수 실행
+    #     log(self.log_box, f"[조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
+    #     self.executor.send_buy_order(code, amount, step=step, current_price=price)
+    #     self.executor.pending_buys.add((code, account))
 
     def open_schedule_settings(self):
         strategy_list = [self.strategy_dropdown.itemText(i) for i in range(self.strategy_dropdown.count())]
@@ -1155,10 +1177,12 @@ class AutoTradeUI(QMainWindow):
             log(self.log_box, "🛑 스케줄 적용 해제됨")
 
     def toggle_condition_auto_buy(self, checked):
-        if checked:
-            log(self.log_box, "✅ 조건검색 자동매수 활성화됨")
+        if hasattr(self.executor, "condition_auto_buy"):
+            self.executor.condition_auto_buy = checked
+            status = "✅ 조건검색 자동매수 활성화됨" if checked else "🛑 조건검색 자동매수 비활성화됨"
+            log(self.log_box, status)
         else:
-            log(self.log_box, "🛑 조건검색 자동매수 비활성화됨")
+            log(self.log_box, "⚠️ Executor가 초기화되지 않았습니다.")
 
     def open_config_dialog(self, first_time=False):
         dialog = ConfigDialog(self.config, self)
