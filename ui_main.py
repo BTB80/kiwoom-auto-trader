@@ -376,7 +376,8 @@ class AutoTradeUI(QMainWindow):
         self.api.ocx.OnReceiveTrCondition.connect(self.condition_controller.on_receive_tr_condition)
         self.api.ocx.OnReceiveConditionVer.connect(self.condition_controller.on_condition_loaded)
         self.condition_search_button.clicked.connect(self.condition_controller.handle_search)
-        self.api.ocx.OnReceiveRealCondition.connect(self.on_receive_real_condition)
+        self.api.ocx.OnReceiveRealCondition.connect(self.condition_controller.on_receive_real_condition)
+
         
 
     def setup_buttons(self):
