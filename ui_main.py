@@ -659,30 +659,38 @@ class AutoTradeUI(QMainWindow):
                     
 
     def start_auto_trade(self):
-            if not getattr(self.manager, "holdings_loaded", False):
-                QMessageBox.warning(self, "⏳ 잔고 수신 중", "보유 종목 정보를 아직 수신되지 않았습니다.")
-                return
+        if not getattr(self.manager, "holdings_loaded", False):
+            QMessageBox.warning(self, "⏳ 잔고 수신 중", "보유 종목 정보를 아직 수신되지 않았습니다.")
+            return
 
-            log(self.log_box, "✅ 자동매매 준비 중 → 상태 복원 중...")
+        # ✅ 현재 선택된 전략명 확인
+        selected_strategy = self.strategy_dropdown.currentText()
+        if not selected_strategy:
+            QMessageBox.warning(self, "❌ 전략 없음", "자동매매를 시작하기 전에 전략을 선택하세요.")
+            return
 
-            # 보유정보를 executor에 복사
-            self.executor.holdings = self.manager.holdings
+        # ✅ 명시적으로 전략 적용
+        self.handle_strategy_selected(selected_strategy)
 
-            # 🔁 buy/sell history 재구성
-            self.executor.reconstruct_buy_history_from_holdings()
-            self.executor.reconstruct_sell_history_from_holdings()
+        if not self.executor.buy_settings.get("accounts"):
+            QMessageBox.warning(self, "⚠️ 전략 설정 없음", "선택한 전략에 매수 조건이 없습니다.")
+            return
 
-            log(self.log_box, "🔁 매수/매도 단계 자동 복원 완료")
+        log(self.log_box, "✅ 자동매매 준비 중 → 상태 복원 중...")
 
-            # 일시적으로 비활성화
-            self.executor.enabled = False
+        self.executor.holdings = self.manager.holdings
+        self.executor.reconstruct_buy_history_from_holdings()
+        self.executor.reconstruct_sell_history_from_holdings()
+        log(self.log_box, "🔁 매수/매도 단계 자동 복원 완료")
 
-            if len(self.executor.accounts) > 1:
-                self.handle_account_button_clicked(1)
-                QTimer.singleShot(1000, lambda: self.handle_account_button_clicked(0))
+        self.executor.enabled = False
 
-            # 7초 뒤 자동매매 활성화
-            QTimer.singleShot(7000, self.enable_auto_trade)
+        if len(self.executor.accounts) > 1:
+            self.handle_account_button_clicked(1)
+            QTimer.singleShot(1000, lambda: self.handle_account_button_clicked(0))
+
+        QTimer.singleShot(7000, self.enable_auto_trade)
+
 
     def enable_auto_trade(self):
         self.executor.enabled = True
@@ -1249,12 +1257,14 @@ class AutoTradeUI(QMainWindow):
             next_time = QTime.fromString(blocks[i+1].get("time", "23:59"), "HH:mm") if i + 1 < len(blocks) else end_time
 
             if curr_time <= now < next_time:
-                # 전략 자동 변경
-                if curr.get("strategy") and curr["strategy"] != self.strategy_dropdown.currentText():
-                    self.strategy_dropdown.setCurrentText(curr["strategy"])
-                    log(self.log_box, f"🧠 전략 자동 변경: {curr['strategy']}")
+                # ✅ 전략 자동 변경 (UI + 실행기 모두 반영)
+                target_strategy = curr.get("strategy", "").strip()
+                if target_strategy and target_strategy != self.strategy_dropdown.currentText():
+                    self.strategy_dropdown.setCurrentText(target_strategy)
+                    self.handle_strategy_selected(target_strategy)  # ✅ 전략 적용
+                    log(self.log_box, f"🧠 전략 자동 변경: {target_strategy}")
 
-                # 조건검색 자동 실행
+                # ✅ 조건검색 자동 실행
                 condition = curr.get("condition", "")
                 if condition and ":" in condition:
                     try:
@@ -1262,7 +1272,6 @@ class AutoTradeUI(QMainWindow):
                         index = int(index.strip())
                         name = name.strip()
 
-                        # ✅ UI 드롭다운도 동기화
                         self.condition_dropdown.setCurrentText(f"{index}: {name}")
 
                         self.api.ocx.dynamicCall(
@@ -1273,7 +1282,7 @@ class AutoTradeUI(QMainWindow):
                     except Exception as e:
                         log(self.log_box, f"❌ 조건검색 실행 실패: {e}")
 
-                break  # ✅ 구간 1개만 실행 후 종료
+                break  # ✅ 현재 구간만 실행
 
     def on_receive_real_condition(self, screen_no, code, event_type, condition_name):
         if event_type != "I":
@@ -1321,13 +1330,20 @@ class AutoTradeUI(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             self.schedule_config = dialog.get_schedule_data()
 
-            # ✅ 저장된 이름 적용
-            if hasattr(dialog, "last_saved_name") and dialog.last_saved_name:
-                name = dialog.last_saved_name
+            # ✅ 저장된 이름 적용 및 전략 동기화
+            name = getattr(dialog, "last_saved_name", None)
+
+            if name:
                 self.refresh_schedule_dropdown_main(selected_name=name)
                 log(self.log_box, f"✅ 스케줄 '{name}' 설정이 적용됨")
+
+                # ✅ 전략명 동기화 및 즉시 적용
+                if name in [self.strategy_dropdown.itemText(i) for i in range(self.strategy_dropdown.count())]:
+                    self.strategy_dropdown.setCurrentText(name)
+                    self.handle_strategy_selected(name)
             else:
                 log(self.log_box, f"✅ 스케줄 설정이 적용됨")
+
             
     def setup_menu_actions(self):
         self.actionOpenScheduleDialog = self.findChild(QAction, "actionOpenScheduleDialog")

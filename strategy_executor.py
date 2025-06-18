@@ -38,6 +38,14 @@ class AutoTradeExecutor:
         self.account_settings = strategy
         self.buy_settings = strategy.get("buy", {})
         self.sell_settings = strategy.get("sell", {})
+        
+            # 🔽 여기에 추가
+        if hasattr(strategy, "name"):
+            self.current_strategy_name = strategy["name"]
+        elif hasattr(self, "manager") and hasattr(self.manager.ui, "strategy_dropdown"):
+            self.current_strategy_name = self.manager.ui.strategy_dropdown.currentText()
+        else:
+            self.current_strategy_name = "전략미지정"
 
     def record_holding(self, code, account, price):
         self.holdings.setdefault(code, {})[account] = {"buy_price": price, "qty": 1}
