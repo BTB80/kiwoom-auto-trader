@@ -206,3 +206,8 @@ class ScheduleSettingsDialog(QDialog):
         super().accept()
         if self.parent() and hasattr(self.parent(), "refresh_schedule_dropdown_main"):
             self.parent().refresh_schedule_dropdown_main()
+            
+    def set_selected_schedule(self, name):
+        index = self.schedule_dropdown.findText(name)
+        if index != -1:
+            self.schedule_dropdown.setCurrentIndex(index)
