@@ -36,6 +36,7 @@ from strategy_executor import AutoTradeExecutor
 from PyQt5.QtCore import QTimer
 from modules.telegram_utils import configure_telegram
 from modules.all_holdings_popup import AllHoldingsPopup
+from modules.tr_codes import SCR_REALTIME_CONDITION
 
 from utils import log_trade
 from utils import (
@@ -355,12 +356,10 @@ class AutoTradeUI(QMainWindow):
             self.config_button.setStyleSheet(UNIFORM_BUTTON_STYLE)
             self.config_button.clicked.connect(lambda: self.open_config_dialog(first_time=False))
 
-        self.schedule_enabled_button.setCheckable(True)
+        self.schedule_enabled_button.setCheckable(False)
         self.schedule_enabled_button.toggled.connect(self.on_schedule_toggle)
 
-        
-
-        self.condition_auto_buy_checkbox.setCheckable(True)
+        self.condition_auto_buy_checkbox.setChecked(False)  # 상태 확실히 False로 설정
         self.condition_auto_buy_checkbox.toggled.connect(self.toggle_condition_auto_buy)
 
         self.schedule_dropdown_main.currentTextChanged.connect(self.load_selected_schedule)
@@ -1053,47 +1052,13 @@ class AutoTradeUI(QMainWindow):
 
                         self.api.ocx.dynamicCall(
                             "SendCondition(QString, QString, int, int)",
-                            "5000", name, index, 1
+                            SCR_REALTIME_CONDITION, name, index, 1
                         )
                         log(self.log_box, f"🔍 조건검색 자동 실행: {name}")
                     except Exception as e:
                         log(self.log_box, f"❌ 조건검색 실행 실패: {e}")
 
                 break  # ✅ 현재 구간만 실행
-
-    # def on_receive_real_condition(self, screen_no, code, event_type, condition_name):
-    #     if event_type != "I":
-    #         return
-
-    #     if not self.condition_auto_buy_checkbox.isChecked():
-    #         return
-
-    #     # 종목 정보 확보
-    #     name = self.api.get_master_code_name(code)
-    #     price = self.api.get_master_last_price(code)
-
-    #     # 계좌1 설정 확인
-    #     step = 1
-    #     account = self.executor.get_account_by_step(step)
-    #     buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
-    #     amount = buy_conf.get("amount", 0)
-    #     enabled = buy_conf.get("enabled", False)
-
-    #     if not enabled or amount <= 0:
-    #         return
-
-    #     # 중복 매수 방지
-    #     if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
-    #         log(self.log_box, f"[조건매수 스킵] {code}: 이미 계좌1에서 보유 중")
-    #         return
-    #     if (code, account) in self.executor.pending_buys:
-    #         log(self.log_box, f"[조건매수 스킵] {code}: 체결 대기 중")
-    #         return
-
-    #     # 매수 실행
-    #     log(self.log_box, f"[조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
-    #     self.executor.send_buy_order(code, amount, step=step, current_price=price)
-    #     self.executor.pending_buys.add((code, account))
 
     def open_schedule_settings(self):
         strategy_list = [self.strategy_dropdown.itemText(i) for i in range(self.strategy_dropdown.count())]

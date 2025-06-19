@@ -16,3 +16,6 @@ SCR_TODAY_PROFIT       = "3000"
 SCR_WATCHLIST_DETAILS  = "9100"
 SCR_ORDER_HISTORY      = "9201"
 SCR_ESTIMATED_ASSET    = "3450"         # ✅ 신규 추가
+SCR_REALTIME_HOLDINGS  = "6000"   # 보유종목 실시간 시세용
+SCR_REALTIME_WATCHLIST = "5000"   # 관심종목 실시간 시세용
+SCR_REALTIME_CONDITION = "7000"   # 조건검색 실시간 시세용

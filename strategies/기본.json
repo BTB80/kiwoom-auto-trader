@@ -1,7 +1,7 @@
 {
   "buy": {
     "order_type": "지정가",
-    "test_mode": true,
+    "test_mode": false,
     "accounts": {
       "계좌1": {
         "enabled": true,

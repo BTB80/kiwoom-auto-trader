@@ -17,9 +17,10 @@ from modules.tr_codes import (
     SCR_ORDER_HISTORY,
     SCR_ESTIMATED_ASSET 
 )
-from strategy_executor import AutoTradeExecutor
+from modules.tr_codes import SCR_REALTIME_HOLDINGS
+# from strategy_executor import AutoTradeExecutor
 from utils import log, log_debug, to_int, SHOW_DEBUG
-from modules.tr_handler import handle_watchlist_tr_data
+# from modules.tr_handler import handle_watchlist_tr_data
 
 class AccountManager:
     def __init__(self, api, config=None):
@@ -43,17 +44,13 @@ class AccountManager:
         self.missing_codes_logged = set()
         self.retry_watchlist_queue = []
         self.api.manager = self
-        # 조건검색 결과 누적용 속성들 (조건식_TR_ 처리용)
-        self.condition_result_codes = []
-        self.condition_result_data = []
-        self.condition_result_index = 0
-        self.current_condition_name = ""
         self.ui = None
         # ✅ 계좌 관련 필드 초기화
         self.accounts = []
         self.expected_accounts = set()
         self.received_accounts = set()
         self.holdings_loaded = False
+
         
     def set_ui_elements(self, combo, label, table, log_box, unsettled_table):
         self.account_combo = combo
@@ -102,7 +99,25 @@ class AccountManager:
         else:
             log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
 
+    def get_allowed_accounts(self):
+        acc_list = self.api.ocx.dynamicCall("GetLoginInfo(QString)", "ACCNO")
+        accounts = acc_list.strip().split(";")[:-1]
 
+        # ✅ 설정된 계좌번호로 필터링
+        allowed = {
+            self.config.get("account1", ""),
+            self.config.get("account2", ""),
+            self.config.get("account3", ""),
+            self.config.get("account4", ""),
+        }
+        allowed = {acc for acc in allowed if acc}  # 빈 문자열 제거
+
+        return [acc for acc in accounts if acc in allowed]
+    
+    def get_alias_by_account(self, account):
+        if hasattr(self, "accounts") and account in self.accounts:
+            return f"계좌{self.accounts.index(account) + 1}"
+        return account  # fallback
 
     def request_deposit_info(self, account):
         self.current_account = account
@@ -130,24 +145,29 @@ class AccountManager:
     def request_all_holdings(self, accounts, on_complete=None):
         self.pending_accounts = set(accounts)
         self.on_holdings_complete = on_complete
+        self._holding_index = 0  # ✅ 내부 인덱스 사용
 
-        def request_next_holdings(index=0):
-            if index < len(accounts):
-                self.request_holdings(accounts[index])
-                QTimer.singleShot(300, lambda: request_next_holdings(index + 1))
+        def request_next():
+            if self._holding_index < len(accounts):
+                account = accounts[self._holding_index]
+                self._holding_index += 1
+                self.request_holdings(account)
+                QTimer.singleShot(300, request_next)  # 일정 간격 유지
             else:
                 log(self.log_box, "✅ 모든 잔고 요청 전송 완료")
-                self.holdings_loaded = True  # ✅ 여기 추가
+                self.holdings_loaded = True
+
+                # ✅ 안전한 콜백 호출
                 callback = getattr(self, "on_holdings_complete", None)
                 if callable(callback):
                     callback()
-                if hasattr(self, "on_holdings_complete"):
-                    del self.on_holdings_complete
-                if hasattr(self, "pending_accounts"):
-                    del self.pending_accounts
 
-        request_next_holdings()
+                # ✅ 속성 안전 삭제
+                for attr in ("_holding_index", "on_holdings_complete", "pending_accounts"):
+                    if hasattr(self, attr):
+                        delattr(self, attr)
 
+        request_next()
 
     def handle_holdings_response_complete(self, account):
         if hasattr(self, "pending_accounts"):
@@ -162,20 +182,16 @@ class AccountManager:
                 if hasattr(self, "pending_accounts"):
                     del self.pending_accounts
 
-
     def start_realtime_updates(self):
         if not self.holdings:
             log(self.log_box, "⚠️ 실시간 등록 실패: holdings 비어 있음")
             return
 
         code_list = ";".join(self.holdings.keys())
-        self.api.ocx.dynamicCall("SetRealReg(QString, QString, QString, QString)", "5000", code_list, "10", "0")
+        self.api.ocx.dynamicCall("SetRealReg(QString, QString, QString, QString)",
+                                SCR_REALTIME_HOLDINGS, code_list, "10", "0")
 
-        log(self.log_box, f"📡 실시간 시세 등록 완료 ({len(self.holdings)} 종목)")
-
-        if SHOW_DEBUG:
-            log_debug(self.log_box, f"[실시간 등록] 종목 코드 목록: {code_list}")
-
+        log(self.log_box, f"📡 보유종목 실시간 시세 등록 완료 ({len(self.holdings)} 종목)")
 
     def update_real_time_price(self, code, new_price):
         code = code[1:] if code.startswith("A") else code
@@ -210,9 +226,6 @@ class AccountManager:
         self.api.set_input_value("상장폐지조회구분", "0")
         self.api.send_request(TR_ESTIMATED_ASSET, "opw00003", 0, SCR_ESTIMATED_ASSET)
 
-
-        
-
     def refresh_holdings_ui(self):
         self.total_buy = 0
         self.total_eval = 0
@@ -231,7 +244,7 @@ class AccountManager:
             h = account_data[current_account]
             name = h.get("name", "")
             qty = h.get("qty", 0)
-            buy = h.get("buy", 0)
+            buy = h.get("buy_price", 0)
             current = h.get("current", 0)
 
             # ✅ 수량이 0인 경우 holdings에서 제거
@@ -289,8 +302,6 @@ class AccountManager:
         self.update_ui()
         self.holdings_table.viewport().update()  # ✅ 강제 리렌더링
 
-
-
     def handle_tr_data(self, scr_no, rq_name, tr_code, record_name, prev_next):
         if SHOW_DEBUG:
             log_debug(self.log_box, f"[DEBUG] AccountManager.handle_tr_data() 진입 → rq_name: {rq_name}")
@@ -321,10 +332,8 @@ class AccountManager:
         elif rq_name.startswith("조건식_TR_") or rq_name.startswith("조건재요청_TR_"):
             code = rq_name.split("_")[-1]
             name = self.api.get_master_code_name(code)
-            curr_str = self.api.get_comm_data(tr_code, rq_name, 0, "현재가").strip().replace(",", "")
-            prev_str = self.api.get_comm_data(tr_code, rq_name, 0, "기준가").strip().replace(",", "")
-            curr = abs(to_int(curr_str))
-            prev = to_int(prev_str)
+            curr = abs(to_int(self.api.get_comm_data(tr_code, rq_name, 0, "현재가").strip().replace(",", "")))
+            prev = to_int(self.api.get_comm_data(tr_code, rq_name, 0, "기준가").strip().replace(",", ""))
 
             if prev == 0:
                 log(self.log_box, f"⚠️ {code} 기준가 없음 → prev = curr ({curr})로 대체")
@@ -332,36 +341,21 @@ class AccountManager:
 
             rate = ((curr - prev) / prev * 100) if prev else 0.0
 
-            self.basic_info_map[code] = {
-                "name": name,
-                "price": curr,
-                "current_price": curr,
-                "prev_price": prev
-            }
+            # ✅ basic_info_map은 executor 쪽으로 저장
+            if hasattr(self.executor, "basic_info_map"):
+                self.executor.basic_info_map[code] = {
+                    "name": name,
+                    "price": curr,
+                    "current_price": curr,
+                    "prev_price": prev
+                }
 
-            if hasattr(self, "ui"):
-                ui = self.ui
-
-                if hasattr(ui, "condition_retry_queue") and code in ui.condition_retry_queue:
-                    ui.condition_retry_queue.remove(code)
-
-                ui.condition_controller.condition_result_data.append(
-                    [code, name, prev, curr, rate, ui.condition_controller.current_condition_name]
-                )
-
-                if ui.condition_auto_buy_checkbox.isChecked() and hasattr(self, "executor"):
-                    buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
-                    amount = buy_conf.get("amount", 0)
-                    if buy_conf.get("enabled") and amount > 0:
-                        step = 1
-                        account = self.executor.get_account_by_step(step)
-                        log(self.log_box, f"[조건검색 매수] {code} / 계좌={account} / 현재가={curr} / 금액={amount:,}")
-                        self.executor.send_buy_order(code, amount, step=step, current_price=curr)
-                        self.executor.pending_buys.add((code, account))
-
-                QTimer.singleShot(300, ui.condition_controller.fetch_next_condition_stock)
+            # ✅ 조건검색 결과 UI에 전달 (append 및 다음 TR 호출은 controller가 담당)
+            if hasattr(self, "ui") and hasattr(self.ui, "condition_controller"):
+                self.ui.condition_controller.handle_condition_tr_result(code, name, prev, curr, rate)
 
             return
+
 
         # ✅ 매수/매도 요청 후 응답 처리 (현재는 단순 로그만)
         elif rq_name in ("매수", "매도"):
@@ -371,12 +365,6 @@ class AccountManager:
         # ⚠️ 그 외 rq_name 무시
         if SHOW_DEBUG:
             log_debug(self.log_box, f"[⚠️ 무시됨] AccountManager.handle_tr_data(): rq_name={rq_name} 은 처리 대상 아님")
-
-
-
-
-
-
 
     def update_ui(self):
         if self.account_info_label:
@@ -404,30 +392,6 @@ class AccountManager:
                 f"당일 실현손익: <span style='color:{day_profit_color}'>{self.today_profit:,} 원</span>"
             )
 
-    def get_allowed_accounts(self):
-        acc_list = self.api.ocx.dynamicCall("GetLoginInfo(QString)", "ACCNO")
-        accounts = acc_list.strip().split(";")[:-1]
-
-        # ✅ 설정된 계좌번호로 필터링
-        allowed = {
-            self.config.get("account1", ""),
-            self.config.get("account2", ""),
-            self.config.get("account3", ""),
-            self.config.get("account4", ""),
-        }
-        allowed = {acc for acc in allowed if acc}  # 빈 문자열 제거
-
-        return [acc for acc in accounts if acc in allowed]
-
-        
-    def set_executor(self, executor):
-        self.executor = executor  
-        
-    def get_alias_by_account(self, account):
-        if hasattr(self, "accounts") and account in self.accounts:
-            return f"계좌{self.accounts.index(account) + 1}"
-        return account  # fallback
-
     def request_order_history(self, account):
         self.last_requested_order_account = account  # ✅ 요청 직전 계좌 기억
 
@@ -444,7 +408,6 @@ class AccountManager:
         self.api.set_input_value("거래소구분", "%")
         self.api.send_request(TR_ORDER_HISTORY, "opw00007", 0, screen_no)
 
-        
     def request_all_order_history(self):
         if hasattr(self, "trade_log_table") and self.trade_log_table:
             self.trade_log_table.setRowCount(0)  # 전체 요청 전에 한 번만 지움
@@ -467,3 +430,9 @@ class AccountManager:
             QTimer.singleShot(500, lambda: request_next_orders(index + 1))  # 0.5초 간격으로 순차 요청
 
         request_next_orders()
+
+    def get_screen_no_by_account(self, account):
+        for screen_no, acc in self.scr_account_map.items():
+            if acc == account:
+                return screen_no
+        return ""

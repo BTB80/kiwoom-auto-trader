@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QTimer
 from modules.watchlist_view import display_condition_results
 from utils import log
-
+from modules.tr_codes import SCR_REALTIME_CONDITION  
 class ConditionSearchController:
     def __init__(self, ui, api, log_fn):
         self.ui = ui
@@ -19,11 +19,12 @@ class ConditionSearchController:
         self.is_retrying = False
 
     def on_condition_loaded(self, ret, msg):
-        if ret == 1:
-            self.log("✅ 조건식 로드 완료")
-            self.initialize_condition_dropdown()
-        else:
+        """조건식 로드 완료 시 실행되는 콜백"""
+        if ret != 1:
             self.log("❌ 조건식 로드 실패")
+            return
+
+        self.initialize_condition_dropdown()
 
     def initialize_condition_dropdown(self):
         cond_list = self.ui.condition_manager.load_condition_list()
@@ -37,6 +38,8 @@ class ConditionSearchController:
             self.ui.condition_dropdown.addItem(f"{index}: {name}")
 
         self.condition_list = cond_list
+        self.log(f"✅ 조건식 {len(cond_list)}개 로드됨")
+
 
     def handle_search(self):
         current_text = self.ui.condition_dropdown.currentText()
@@ -52,7 +55,7 @@ class ConditionSearchController:
             return
 
         name = name.strip()
-        screen_no = "5000"
+        screen_no = SCR_REALTIME_CONDITION
         self.log(f"🔍 조건검색 실행: {index} - {name}")
         self.api.ocx.dynamicCall("SendCondition(QString, QString, int, int)", screen_no, name, index, 1)
 
@@ -195,3 +198,13 @@ class ConditionSearchController:
 
         self.log(f"[조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
         self.executor.send_buy_order(code, account, price, amount, order_type, step)
+
+    def handle_condition_tr_result(self, code, name, prev, curr, rate):
+        if code in self.condition_retry_queue:
+            self.condition_retry_queue.remove(code)
+
+        self.condition_result_data.append(
+            [code, name, prev, curr, rate, self.current_condition_name]
+        )
+
+        QTimer.singleShot(300, self.fetch_next_condition_stock)

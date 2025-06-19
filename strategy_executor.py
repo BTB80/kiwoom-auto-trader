@@ -142,7 +142,7 @@ class AutoTradeExecutor:
             return
 
         price = 0 if order_type == "시장가" else current_price
-        screen_no = self.get_screen_no_by_account(account_no)
+        screen_no = self.manager.get_screen_no_by_account(account_no)
         order_id = f"매수_{code}_{account_no}_{step}"
 
         self.api.send_order(order_id, screen_no, account_no, 1, code, qty, price, order_type, "")
@@ -159,6 +159,15 @@ class AutoTradeExecutor:
 
 
     def evaluate_sell(self, code, current_price):
+        
+        if SHOW_DEBUG:
+            log_debug(None, f"[🧪 sell 평가 진입] {code} / 현재가: {current_price}")
+            if code in self.holdings:
+                for acc, h in self.holdings[code].items():
+                    log_debug(None, f"[💾 holdings 내용] {code} / 계좌:{acc} / 보유: {h}")
+            else:
+                log_debug(None, f"[❌ holdings 없음] {code} → self.holdings.keys: {list(self.holdings.keys())}")
+
         # print(f"[매도 평가 시도] {code} / 현재가: {current_price}")
         if not self.enabled:
             log_debug(None, f"[⏸ 매도 평가 중단] 자동매매 비활성화 상태")
@@ -332,6 +341,14 @@ class AutoTradeExecutor:
                 account_holdings[account_no] = {"buy_price": new_avg_price, "qty": new_qty}
             else:
                 account_holdings[account_no] = {"buy_price": price, "qty": qty}
+                if hasattr(self, "executor") and self.executor:
+                        if code not in self.executor.holdings:
+                            self.executor.holdings[code] = {}
+                        self.executor.holdings[code][account_no] = {
+                            "buy_price": account_holdings[account_no]["buy_price"],
+                            "qty": account_holdings[account_no]["qty"]
+                        }
+                        log_debug(None, f"[🔄 executor.holdings 반영] {code} / 계좌:{account_no} / qty={account_holdings[account_no]['qty']} / price={account_holdings[account_no]['buy_price']}")
 
             # ✅ executor에도 반영
             # if hasattr(self, "executor"):
@@ -432,7 +449,6 @@ class AutoTradeExecutor:
 
 
     def reconstruct_buy_history_from_holdings(self):
-        # ✅ 이미 복원된 경우 생략
         if self.buy_history:
             if SHOW_DEBUG:
                 log_debug(None, "[⏩ 복원 생략] buy_history가 이미 채워져 있음")
@@ -441,7 +457,6 @@ class AutoTradeExecutor:
         new_buy_history = {}
         new_holdings = {}
 
-        # 1️⃣ holdings 기반으로 buy_history 및 holdings 재구성
         for raw_code, account_data in self.holdings.items():
             code = raw_code[1:] if raw_code.startswith("A") else raw_code
 
@@ -452,34 +467,33 @@ class AutoTradeExecutor:
                     price = holding.get("buy_price", 0)
                     step = i + 1
 
-                    # ✅ holdings 재구성은 수량이 있을 때만
+                    if SHOW_DEBUG:
+                        log_debug(None, f"[보유 기반 복원] {code} / 계좌:{account} / step:{step} / qty:{qty} / buy_price:{price}")
+
                     if qty > 0 and price > 0:
                         new_holdings.setdefault(code, {})[account] = {
                             "buy_price": price,
                             "qty": qty
                         }
 
-                    # ✅ buy_history는 qty/price 없어도 step 기준으로 복원
                     if code not in new_buy_history and step:
-                        new_buy_history[code] = {"price": price or 0, "step": step}
+                        new_buy_history[(code, account)] = {"price": price or 0, "step": step}
                         if SHOW_DEBUG:
-                            log_debug(None, f"🔁 {code} → buy_history 복원: step={step}, price={price}")
+                            log_debug(None, f"🔁 {code} → buy_history 추가: step={step}, price={price}")
 
-        # 2️⃣ sell_history 기반 누락 보정 (step 정보 유지)
         for code, sell_info in self.sell_history.items():
             if code not in new_buy_history:
-                new_buy_history[code] = {"price": 0, "step": sell_info.get("step", 1)}
+                step = sell_info.get("step", 1)
+                new_buy_history[code] = {"price": 0, "step": step}
                 if SHOW_DEBUG:
-                    log_debug(None, f"📌 {code} → sell_history 기반 buy_history 추가: step={sell_info.get('step', 1)}")
+                    log_debug(None, f"📌 {code} → sell_history 기반 추가: step={step}")
 
         self.buy_history = new_buy_history
         self.holdings = new_holdings
 
         if SHOW_DEBUG:
             log_debug(None, f"✅ buy_history 복원 완료: {len(new_buy_history)} 종목")
-            self.print_holdings_summary()  # 🔍 자동 복원 직후 보유 상태 확인
-
-
+            self.print_holdings_summary()
 
 
     def reconstruct_sell_history_from_holdings(self):

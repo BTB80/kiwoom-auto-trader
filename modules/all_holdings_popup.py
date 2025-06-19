@@ -64,7 +64,7 @@ class AllHoldingsPopup(QDialog):
                 current_price = self.basic_info_map.get(code_with_prefix, {}).get("price", info.get("current", 0))
 
                 qty = info.get("qty", 0)
-                buy_price = info.get("buy", 0)
+                buy_price = info.get("buy_price", 0)
 
                 profit_rate = ((current_price - buy_price) / buy_price * 100) if buy_price > 0 else 0.0
                 buy_amt = qty * buy_price

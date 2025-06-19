@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QTableWidgetItem
 from config_manager import load_user_config
 import os
 # ⚙️ 전역 설정값
-SHOW_DEBUG = False
+SHOW_DEBUG = True
 SHOW_VERBOSE_BUY_EVAL = False
 SHOW_VERBOSE_SELL_EVAL = False
 
