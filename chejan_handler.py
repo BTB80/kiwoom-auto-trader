@@ -1,14 +1,12 @@
 from datetime import datetime
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtWidgets import QTableWidgetItem
-from utils import log_debug, log_info, write_trade_log_file
+from PyQt5.QtCore import QTimer
 from modules.telegram_utils import send_telegram_message
 
 class ChejanHandlerMixin:
     def handle_chejan_data(self, gubun, item_cnt, fid_list):
         if gubun != "0":
-            if getattr(self, "SHOW_DEBUG", False):
-                log_debug(None, f"[⛔️ 무시됨] gubun={gubun} (체결 아님)")
+            if getattr(self.logger, "debug_enabled", False):
+                self.logger.debug(f"[⛔️ 무시됨] gubun={gubun} (체결 아님)")
             return
 
         code = self._get_clean_code(self.api.ocx.dynamicCall("GetChejanData(int)", 9001).strip())
@@ -42,8 +40,8 @@ class ChejanHandlerMixin:
         amount = qty * price
         strategy_name = getattr(self, "current_strategy_name", "전략미지정")
 
-        log_info(None, f"[🟢 매수 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
-        write_trade_log_file(f"[🟢 매수 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
+        self.logger.info(f"[🟢 매수 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
+        self.write_trade_log_file(f"[🟢 매수 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
 
         self.pending_buys.discard((code, account_no))
 
@@ -55,7 +53,7 @@ class ChejanHandlerMixin:
 
         if hasattr(self, "executor") and self.executor:
             self.executor.holdings.setdefault(code, {})[account_no] = holdings[account_no]
-            log_debug(None, f"[🔄 executor.holdings 반영] {code} / 계좌:{account_no} / qty={new_qty} / price={new_price}")
+            self.logger.debug(f"[🔄 executor.holdings 반영] {code} / 계좌:{account_no} / qty={new_qty} / price={new_price}")
 
         if hasattr(self, "reconstruct_buy_history_from_holdings"):
             self.reconstruct_buy_history_from_holdings()
@@ -83,19 +81,19 @@ class ChejanHandlerMixin:
         key = self.normalize_key(code, account_no)
 
         if not (isinstance(key, tuple) and len(key) == 2 and all(isinstance(k, str) for k in key)):
-            log_debug(None, f"[⛔️ 잘못된 sell_history 저장 시도 차단] {key}")
+            self.logger.debug(f"[⛔️ 잘못된 sell_history 저장 시도 차단] {key}")
             return
 
-        log_info(None, f"[🔴 매도 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
-        write_trade_log_file(f"[🔴 매도 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
+        self.logger.info(f"[🔴 매도 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
+        self.write_trade_log_file(f"[🔴 매도 체결] {code} | 계좌:{account_no} | 수량:{qty} | 가격:{price}")
 
-        # ✅ 잔고 차감
+        # 잔고 차감
         for h in [self.holdings, getattr(self.manager, 'holdings', {})]:
             if code in h and account_no in h[code]:
                 prev_qty = h[code][account_no].get("qty", 0)
                 new_qty = max(0, prev_qty - qty)
                 h[code][account_no]["qty"] = new_qty
-                log_debug(None, f"[📉 매도 후 잔고 수정] {code} / 계좌: {account_no} / 잔여:{new_qty}")
+                self.logger.debug(f"[📉 매도 후 잔고 수정] {code} / 계좌: {account_no} / 잔여:{new_qty}")
                 if new_qty == 0:
                     del h[code][account_no]
                     if not h[code]:

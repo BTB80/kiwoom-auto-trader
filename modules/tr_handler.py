@@ -1,9 +1,11 @@
-from utils import to_int, log
+from log_manager import to_int, LogManager
 from PyQt5.QtWidgets import QTableWidgetItem
 from PyQt5.QtCore import Qt
 from modules.watchlist_view import update_watchlist_price
 
 def handle_watchlist_tr_data(api, table_widget, basic_info_map, rq_name, tr_code, target=None):
+    logger = getattr(api.manager, "logger", None) or LogManager()
+
     try:
         code = rq_name.split("_")[-1]
 
@@ -16,7 +18,7 @@ def handle_watchlist_tr_data(api, table_widget, basic_info_map, rq_name, tr_code
 
         # ❗ 전일종가 또는 현재가가 누락되면 재요청 큐에 추가
         if (prev_close_raw == "-" or prev_close == 0 or curr_price == 0):
-            log(None, f"⚠️ {code} 기본정보 누락 (전일종가: {prev_close_raw}, 현재가: {curr_price_raw}) → 재요청 대상")
+            logger.log(f"⚠️ {code} 기본정보 누락 (전일종가: {prev_close_raw}, 현재가: {curr_price_raw}) → 재요청 대상")
             if hasattr(api, "manager") and hasattr(api.manager, "retry_watchlist_queue"):
                 if code not in api.manager.retry_watchlist_queue:
                     api.manager.retry_watchlist_queue.append(code)
@@ -58,7 +60,7 @@ def handle_watchlist_tr_data(api, table_widget, basic_info_map, rq_name, tr_code
         # 현재가 반영
         update_watchlist_price(table_widget, basic_info_map, code, curr_price)
 
-        log(None, f"📘 {code} 전일:{prev_close:,} 현재:{curr_price:,}")
+        logger.log(f"📘 {code} 전일:{prev_close:,} 현재:{curr_price:,}")
 
     except Exception as e:
-        log(None, f"❌ 기본정보 TR 처리 오류: {e}")
+        logger.log(f"❌ 기본정보 TR 처리 오류: {e}")

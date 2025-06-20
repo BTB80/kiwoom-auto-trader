@@ -17,9 +17,10 @@ from modules.tr_codes import (
     SCR_ORDER_HISTORY,
     SCR_ESTIMATED_ASSET 
 )
+from log_manager import to_int
 from modules.tr_codes import SCR_REALTIME_HOLDINGS
 # from strategy_executor import AutoTradeExecutor
-from utils import log, log_debug, to_int, SHOW_DEBUG
+from log_manager import LogManager
 # from modules.tr_handler import handle_watchlist_tr_data
 
 class AccountManager:
@@ -64,7 +65,7 @@ class AccountManager:
     
     def handle_login_event(self, err_code):
         if err_code == 0:
-            # log(self.log_box, "✅ 로그인 성공")
+            # self.logger.log("✅ 로그인 성공")
 
             acc_list = self.api.ocx.dynamicCall("GetLoginInfo(QString)", "ACCNO")
             accounts = acc_list.strip().split(";")[:-1]
@@ -80,9 +81,9 @@ class AccountManager:
 
             filtered = [acc for acc in accounts if acc in allowed]
 
-            if SHOW_DEBUG:
-                log_debug(self.log_box, f"[로그인 처리] 전체 계좌 목록: {accounts}")
-                log_debug(self.log_box, f"[로그인 처리] 허용된 계좌 필터링 결과: {filtered}")
+            if self.logger.debug_enabled:
+                self.logger.debug(f"[로그인 처리] 전체 계좌 목록: {accounts}")
+                self.logger.debug(f"[로그인 처리] 허용된 계좌 필터링 결과: {filtered}")
 
             self.account_combo.blockSignals(True)
             self.account_combo.clear()
@@ -93,11 +94,11 @@ class AccountManager:
 
             if filtered and hasattr(self, 'executor') and self.executor:
                 self.executor.set_accounts(filtered)
-                if SHOW_DEBUG:
-                    log_debug(self.log_box, "[로그인 처리] executor에 계좌 리스트 전달 완료")
+                if self.logger.debug_enabled:
+                    self.logger.debug("[로그인 처리] executor에 계좌 리스트 전달 완료")
 
         else:
-            log(self.log_box, f"❌ 로그인 실패: 코드 {err_code}")
+            self.logger.log(f"❌ 로그인 실패: 코드 {err_code}")
 
     def get_allowed_accounts(self):
         acc_list = self.api.ocx.dynamicCall("GetLoginInfo(QString)", "ACCNO")
@@ -121,7 +122,7 @@ class AccountManager:
 
     def request_deposit_info(self, account):
         self.current_account = account
-        log(self.log_box, f"📨 예수금 조회 요청: {account}")
+        self.logger.log(f"📨 예수금 조회 요청: {account}")
         self.api.set_input_value("계좌번호", account)
         self.api.set_input_value("비밀번호", "")
         self.api.set_input_value("비밀번호입력매체구분", "00")
@@ -131,7 +132,7 @@ class AccountManager:
     def request_holdings(self, account):
         # ✅ 계좌 끝 4자리 기준 screen_no 생성 (800000 ~ 899999 내에서 고유하게)
         screen_no = str(800000 + int(account[-4:]))
-        log(self.log_box, f"🔧 매핑: screen_no={screen_no}, account={account}")
+        self.logger.log(f"🔧 매핑: screen_no={screen_no}, account={account}")
 
         self.scr_account_map[screen_no] = account
 
@@ -154,7 +155,7 @@ class AccountManager:
                 self.request_holdings(account)
                 QTimer.singleShot(300, request_next)  # ⏱ 다음 요청 예약
             else:
-                log(self.log_box, "✅ 모든 잔고 요청 전송 완료")
+                self.logger.log("✅ 모든 잔고 요청 전송 완료")
                 self.holdings_loaded = True
 
                 # ✅ 콜백 안전 호출
@@ -163,7 +164,7 @@ class AccountManager:
                     try:
                         callback()
                     except Exception as e:
-                        log(self.log_box, f"[⚠️ 콜백 실행 오류] {e}")
+                        self.logger.log(f"[⚠️ 콜백 실행 오류] {e}")
 
                 # ✅ 일회성 속성 정리 (on_holdings_complete은 None으로만 초기화)
                 for attr in ("_holding_index", "pending_accounts"):
@@ -171,7 +172,7 @@ class AccountManager:
                         try:
                             delattr(self, attr)
                         except Exception as e:
-                            log_debug(self.log_box, f"[⚠️ delattr 실패] {attr} → {e}")
+                            self.logger.debug(f"[⚠️ delattr 실패] {attr} → {e}")
 
                 self.on_holdings_complete = None  # 안전하게 None 처리
 
@@ -183,24 +184,37 @@ class AccountManager:
             self.pending_accounts.discard(account)
 
             if not self.pending_accounts:
+                # ✅ 중복 방지 플래그 체크
+                if getattr(self, "_called_holdings_complete", False):
+                    return
+                self._called_holdings_complete = True
+
                 callback = getattr(self, "on_holdings_complete", None)
                 if callable(callback):
-                    callback()
-                if hasattr(self, "on_holdings_complete"):
-                    del self.on_holdings_complete
-                if hasattr(self, "pending_accounts"):
-                    del self.pending_accounts
+                    try:
+                        callback()
+                    except Exception as e:
+                        self.logger.log(f"[⚠️ 콜백 실행 오류] {e}")
+
+                # ✅ 일회성 속성 제거
+                for attr in ("on_holdings_complete", "pending_accounts"):
+                    if hasattr(self, attr):
+                        try:
+                            delattr(self, attr)
+                        except Exception as e:
+                            self.logger.debug(f"[⚠️ delattr 실패] {attr} → {e}")
+
 
     def start_realtime_updates(self):
         if not self.holdings:
-            log(self.log_box, "⚠️ 실시간 등록 실패: holdings 비어 있음")
+            self.logger.log("⚠️ 실시간 등록 실패: holdings 비어 있음")
             return
 
         code_list = ";".join(self.holdings.keys())
         self.api.ocx.dynamicCall("SetRealReg(QString, QString, QString, QString)",
                                 SCR_REALTIME_HOLDINGS, code_list, "10", "0")
 
-        log(self.log_box, f"📡 보유종목 실시간 시세 등록 완료 ({len(self.holdings)} 종목)")
+        self.logger.log(f"📡 보유종목 실시간 시세 등록 완료 ({len(self.holdings)} 종목)")
 
     def update_real_time_price(self, code, new_price):
         code = code[1:] if code.startswith("A") else code
@@ -209,8 +223,8 @@ class AccountManager:
             for account in self.holdings[code]:
                 self.holdings[code][account]["current"] = new_price
             self.refresh_holdings_ui()
-        elif SHOW_DEBUG and code not in self.missing_codes_logged:
-            print(f"[❌ holdings에 없음] {code} / 현재가: {new_price}")
+        elif self.logger.debug_enabled and code not in self.missing_codes_logged:
+            self.logger.debug(f"[❌ holdings에 없음] {code} / 현재가: {new_price}")
             self.missing_codes_logged.add(code)
 
     def request_today_profit(self, account):
@@ -224,12 +238,12 @@ class AccountManager:
         self.api.ocx.dynamicCall("CommRqData(QString, QString, int, QString)",
                                 TR_TODAY_PROFIT, "opt10074", 0, SCR_TODAY_PROFIT)
 
-        if SHOW_DEBUG:
-            log_debug(self.log_box, f"[🔄 실현손익 요청] 계좌: {account}, 날짜: {today}")
+        if self.logger.debug_enabled:
+            self.logger.debug(f"[🔄 실현손익 요청] 계좌: {account}, 날짜: {today}")
                 
     def request_estimated_asset(self, account):
         self.current_account = account
-        log(self.log_box, f"📨 추정자산 조회 요청: {account}")
+        self.logger.log(f"📨 추정자산 조회 요청: {account}")
         self.api.set_input_value("계좌번호", account)
         self.api.set_input_value("비밀번호", "")
         self.api.set_input_value("상장폐지조회구분", "0")
@@ -312,8 +326,8 @@ class AccountManager:
         self.holdings_table.viewport().update()  # ✅ 강제 리렌더링
 
     def handle_tr_data(self, scr_no, rq_name, tr_code, record_name, prev_next):
-        if SHOW_DEBUG:
-            log_debug(self.log_box, f"[DEBUG] AccountManager.handle_tr_data() 진입 → rq_name: {rq_name}")
+        if self.logger.debug_enabled:
+            self.logger.debug(f"[DEBUG] AccountManager.handle_tr_data() 진입 → rq_name: {rq_name}")
 
         # ✅ 기본 계좌 관련 TR 처리
         if rq_name in (TR_DEPOSIT_INFO, TR_HOLDINGS_INFO, TR_TODAY_PROFIT, TR_ORDER_HISTORY, TR_ESTIMATED_ASSET):
@@ -334,7 +348,7 @@ class AccountManager:
                             self.ui.trade_start_button.setEnabled(True)
 
                     if not self.pending_accounts:
-                        log(self.log_box, "✅ 모든 계좌의 잔고 수신 완료")
+                        self.logger.log("✅ 모든 계좌의 잔고 수신 완료")
 
                         # buy_history 정리
                         if hasattr(self.executor, "buy_history"):
@@ -344,10 +358,7 @@ class AccountManager:
                             }
                             after = len(self.executor.buy_history)
                             if before != after:
-                                log_debug(self.log_box, f"[⚠️ buy_history 정리] 잘못된 키 제거: {before - after}개")
-
-                        if hasattr(self, "on_holdings_complete") and callable(self.on_holdings_complete):
-                            self.on_holdings_complete()
+                                self.logger.debug(f"[⚠️ buy_history 정리] 잘못된 키 제거: {before - after}개")
 
                         self.holdings_loaded = True
             return result
@@ -366,7 +377,7 @@ class AccountManager:
             prev = to_int(self.api.get_comm_data(tr_code, rq_name, 0, "기준가").strip().replace(",", ""))
 
             if prev == 0:
-                log(self.log_box, f"⚠️ {code} 기준가 없음 → prev = curr ({curr})로 대체")
+                self.logger.log(f"⚠️ {code} 기준가 없음 → prev = curr ({curr})로 대체")
                 prev = curr
 
             rate = ((curr - prev) / prev * 100) if prev else 0.0
@@ -388,12 +399,12 @@ class AccountManager:
 
         # ✅ 매수/매도 요청 후 응답 처리
         elif rq_name in ("매수", "매도"):
-            log(self.log_box, f"✅ 주문 요청 응답 수신 → rq_name: {rq_name} (체결은 chejan_data에서 처리)")
+            self.logger.log(f"✅ 주문 요청 응답 수신 → rq_name: {rq_name} (체결은 chejan_data에서 처리)")
             return
 
         # ⚠️ 그 외 rq_name 무시
-        if SHOW_DEBUG:
-            log_debug(self.log_box, f"[⚠️ 무시됨] AccountManager.handle_tr_data(): rq_name={rq_name} 은 처리 대상 아님")
+        if self.logger.debug_enabled:
+            self.logger.debug(f"[⚠️ 무시됨] AccountManager.handle_tr_data(): rq_name={rq_name} 은 처리 대상 아님")
 
 
     def update_ui(self):
@@ -442,20 +453,20 @@ class AccountManager:
         if hasattr(self, "trade_log_table") and self.trade_log_table:
             self.trade_log_table.setRowCount(0)  # 전체 요청 전에 한 번만 지움
         if not hasattr(self, "accounts"):
-            log(self.log_box, "❌ 계좌 목록이 설정되어 있지 않습니다.")
+            self.logger.log("❌ 계좌 목록이 설정되어 있지 않습니다.")
             return
 
         accounts = self.accounts
 
-        log(self.log_box, f"🔄 전체 계좌 체결내역 요청 시작 ({len(accounts)}개)")
+        self.logger.log(f"🔄 전체 계좌 체결내역 요청 시작 ({len(accounts)}개)")
 
         def request_next_orders(index=0):
             if index >= len(accounts):
-                log(self.log_box, "✅ 전체 계좌 체결내역 요청 완료")
+                self.logger.log("✅ 전체 계좌 체결내역 요청 완료")
                 return
 
             account = accounts[index]
-            log(self.log_box, f"📨 체결내역 요청: 계좌 {account}")
+            self.logger.log(f"📨 체결내역 요청: 계좌 {account}")
             self.request_order_history(account)
             QTimer.singleShot(500, lambda: request_next_orders(index + 1))  # 0.5초 간격으로 순차 요청
 
@@ -468,6 +479,10 @@ class AccountManager:
         return ""
     
     def on_holdings_complete(self):
+        if getattr(self, "_called_holdings_complete", False):
+            return
+        self._called_holdings_complete = True
+
         if hasattr(self, "executor") and self.executor:
-            log_debug(self.log_box, "📦 보유 종목 기반으로 buy_history 복원 시작")
+            self.logger.debug("📦 보유 종목 기반으로 buy_history 복원 시작")
             self.executor.reconstruct_buy_history_from_holdings()

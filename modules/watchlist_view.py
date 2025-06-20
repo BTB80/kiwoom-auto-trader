@@ -1,7 +1,7 @@
 
 from functools import partial
 from PyQt5.QtCore import Qt
-from utils import to_int
+from log_manager import to_int
 from PyQt5.QtWidgets import QTableWidgetItem, QPushButton, QSizePolicy, QHeaderView
 
 

@@ -1,26 +1,25 @@
 from PyQt5.QAxContainer import QAxWidget
-from utils import log_debug, SHOW_DEBUG
+from log_manager import LogManager
 
 class KiwoomAPI:
-    def __init__(self):
+    def __init__(self, logger=None):
         self.ocx = QAxWidget("KHOPENAPI.KHOpenAPICtrl.1")
 
-        # ✅ 체결 이벤트 핸들러 저장 리스트
         self.chejan_handlers = []
+        self.logger = logger or LogManager()
 
-        # ✅ 체결 이벤트 시그널 연결
         self.ocx.OnReceiveChejanData.connect(self.on_chejan_data)
 
-    # ✅ 외부 핸들러 등록 함수
+    # ✅ 외부 핸들러 등록
     def register_chejan_handler(self, handler):
         self.chejan_handlers.append(handler)
-        if SHOW_DEBUG:
-            log_debug(None, "✅ 외부 체결 핸들러 등록됨")
+        if self.logger.debug_enabled:
+            self.logger.debug("✅ 외부 체결 핸들러 등록됨")
 
-    # ✅ 체결 이벤트 발생 시 외부 핸들러로 전달
+    # ✅ 체결 이벤트 수신 → 외부 핸들러에 전달
     def on_chejan_data(self, gubun, item_cnt, fid_list):
-        if SHOW_DEBUG:
-            log_debug(None, f"[📨 Chejan 이벤트 수신] gubun={gubun}, item_cnt={item_cnt}")
+        if self.logger.debug_enabled:
+            self.logger.debug(f"[📨 Chejan 이벤트 수신] gubun={gubun}, item_cnt={item_cnt}")
         for handler in self.chejan_handlers:
             handler(gubun, item_cnt, fid_list)
 
@@ -42,25 +41,25 @@ class KiwoomAPI:
 
     # ✅ 주문 전송
     def send_order(self, rqname, screen_no, acc_no, order_type, code, qty, price, hoga, org_order_no):
-        if SHOW_DEBUG:
-            log_debug(None, "📡 SendOrder 호출됨:")
-            log_debug(None, f"  📄 rqname      = {rqname}")
-            log_debug(None, f"  🖥 screen_no   = {screen_no}")
-            log_debug(None, f"  💳 acc_no      = {acc_no}")
-            log_debug(None, f"  🔁 order_type  = {order_type}")
-            log_debug(None, f"  🧾 code        = {code}")
-            log_debug(None, f"  🔢 qty         = {qty}")
-            log_debug(None, f"  💰 price       = {price}")
-            log_debug(None, f"  🎯 hoga        = {hoga}")
-            log_debug(None, f"  🔗 org_order_no= {org_order_no}")
+        if self.logger.debug_enabled:
+            self.logger.debug(f"📡 SendOrder 호출됨:\n"
+                              f"  📄 rqname      = {rqname}\n"
+                              f"  🖥 screen_no   = {screen_no}\n"
+                              f"  💳 acc_no      = {acc_no}\n"
+                              f"  🔁 order_type  = {order_type}\n"
+                              f"  🧾 code        = {code}\n"
+                              f"  🔢 qty         = {qty}\n"
+                              f"  💰 price       = {price}\n"
+                              f"  🎯 hoga        = {hoga}\n"
+                              f"  🔗 org_order_no= {org_order_no}")
 
         result = self.ocx.dynamicCall(
             "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
             [rqname, screen_no, acc_no, order_type, code, qty, price, hoga, org_order_no]
         )
 
-        if SHOW_DEBUG:
-            log_debug(None, f"📨 주문 전송 결과: {result}")
+        if self.logger.debug_enabled:
+            self.logger.debug(f"📨 주문 전송 결과: {result}")
 
         return result
 

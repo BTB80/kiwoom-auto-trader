@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QTimer
 from modules.watchlist_view import display_condition_results
-from utils import log
+from log_manager import LogManager
 from modules.tr_codes import SCR_REALTIME_CONDITION  
 class ConditionSearchController:
     def __init__(self, ui, api, log_fn):
@@ -142,9 +142,9 @@ class ConditionSearchController:
         self.log(f"[🔍 조건검색 결과 수신] {len(codes)}개 종목 (조건: {condition_name})")
 
         for code in codes:
-            self.api.request_basic_info(code)  # 종목명, 전일종가, 현재가 요청
+            self.api.request_basic_info(code)
 
-            # ✅ 자동매수 OFF인 경우 매수 생략
+            # 🔸 조건검색 자동매수 토글이 꺼져있으면 매수 생략
             if not self.executor or not self.executor.condition_auto_buy:
                 self.log(f"[⏸ 조건검색 자동매수 OFF] {code} 매수 생략")
                 continue
@@ -162,7 +162,6 @@ class ConditionSearchController:
             if amount <= 0:
                 self.log(f"[⏸ 조건매수 금액 미지정] {code} / 매수금액 0원")
                 continue
-
             if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
                 self.log(f"[⏸ 조건매수 스킵] {code}: 계좌1 보유 중")
                 continue
@@ -174,6 +173,8 @@ class ConditionSearchController:
             name = self.api.get_master_code_name(code)
 
             self.log(f"[📥 조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
+
+            # ✅ 여기서 하락률 무시하고 바로 매수 실행
             self.executor.send_buy_order(code, account, price, amount, order_type, step)
 
 

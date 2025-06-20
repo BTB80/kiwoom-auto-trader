@@ -1,4 +1,3 @@
-from utils import log, log_debug, to_int, SHOW_DEBUG
 from modules.tr_codes import (
     TR_DEPOSIT_INFO,
     TR_HOLDINGS_INFO,
@@ -9,27 +8,31 @@ from datetime import datetime
 from PyQt5.QtWidgets import QTableWidgetItem
 from PyQt5.QtCore import Qt
 from modules.google_writer import append_trade_log
+from log_manager import to_int  # 유틸 함수만 import
+
 
 def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_next):
+    logger = getattr(manager, "logger", None)
+
     if rq_name == TR_DEPOSIT_INFO:
         raw = manager.api.get_comm_data(tr_code, rq_name, 0, "예수금").replace(",", "")
         manager.deposit = to_int(raw)
-        log(manager.log_box, f"💰 예수금: {manager.deposit:,} 원")
+        logger.log(f"💰 예수금: {manager.deposit:,} 원")
 
         available_raw = manager.api.get_comm_data(tr_code, rq_name, 0, "주문가능금액").replace(",", "")
         manager.available_cash = to_int(available_raw)
-        log(manager.log_box, f"🧾 주문가능금액: {manager.available_cash:,} 원")
+        logger.log(f"🧾 주문가능금액: {manager.available_cash:,} 원")
 
         manager.request_holdings(manager.current_account)
 
     elif rq_name == TR_HOLDINGS_INFO:
-        log(manager.log_box, "🔍 보유종목조회 TR 수신 시작")
+        logger.log("🔍 보유종목조회 TR 수신 시작")
         count = manager.api.ocx.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, rq_name)
-        log(manager.log_box, f"📊 수신된 종목 수: {count}")
+        logger.log(f"📊 수신된 종목 수: {count}")
 
         account = manager.scr_account_map.get(scr_no, manager.current_account)
-        if SHOW_DEBUG:
-            log_debug(manager.log_box, f"[보유 TR] scr_no={scr_no} → account={account}")
+        if logger.debug_enabled:
+            logger.debug(f"[보유 TR] scr_no={scr_no} → account={account}")
 
         for index in range(count):
             name = manager.api.get_comm_data(tr_code, rq_name, index, "종목명").strip()
@@ -42,7 +45,7 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
             buy = to_int(manager.api.get_comm_data(tr_code, rq_name, index, "매입가"))
             price = to_int(manager.api.get_comm_data(tr_code, rq_name, index, "현재가"))
 
-            log_debug(manager.log_box, f"[잔고TR] {code} / qty={qty} / buy={buy} / current={price}")
+            logger.debug(f"[잔고TR] {code} / qty={qty} / buy={buy} / current={price}")
             manager.holdings.setdefault(code, {})[account] = {
                 "name": name,
                 "qty": qty,
@@ -56,15 +59,14 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
                     "price": price
                 }
 
-            if SHOW_DEBUG:
-                log_debug(manager.log_box, f"➡️ {code} {name} (계좌: {account}) qty:{qty} buy:{buy} price:{price}")
+            logger.debug(f"➡️ {code} {name} (계좌: {account}) qty:{qty} buy:{buy} price:{price}")
 
         manager.refresh_holdings_ui()
 
         if manager.holdings:
             manager.start_realtime_updates()
         else:
-            log(manager.log_box, "⚠️ 실시간 등록 생략: holdings 없음")
+            logger.log("⚠️ 실시간 등록 생략: holdings 없음")
 
         if hasattr(manager, "executor") and manager.executor:
             manager.executor.holdings = {}
@@ -73,7 +75,7 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
                 for acc, info in acc_dict.items():
                     buy_price = info.get("buy_price", 0)
                     qty = info.get("qty", 0)
-                    log_debug(manager.log_box, f"[executor.holdings 저장] {code} / 계좌:{acc} / qty={qty} / buy_price={buy_price}")
+                    logger.debug(f"[executor.holdings 저장] {code} / 계좌:{acc} / qty={qty} / buy_price={buy_price}")
                     manager.executor.holdings[code][acc] = {
                         "buy_price": buy_price,
                         "qty": qty
@@ -81,15 +83,14 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
 
             manager.executor.reconstruct_buy_history_from_holdings()
             manager.executor.reconstruct_sell_history_from_holdings()
-            log(manager.log_box, "🔁 매수/매도 단계 자동 복원 완료")
+            logger.log("🔁 매수/매도 단계 자동 복원 완료")
 
         if hasattr(manager, "handle_holdings_response_complete"):
             manager.handle_holdings_response_complete(account)
 
     elif rq_name == TR_TODAY_PROFIT:
         count = manager.api.ocx.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, rq_name)
-        if SHOW_DEBUG:
-            log_debug(manager.log_box, f"📥 실현손익 수신 / 반복건수: {count}")
+        logger.debug(f"📥 실현손익 수신 / 반복건수: {count}")
 
         for i in range(count):
             name = manager.api.get_comm_data(tr_code, rq_name, i, "종목명").strip()
@@ -97,20 +98,18 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
             try:
                 profit = int(profit_str)
                 manager.today_profit += profit
-                if SHOW_DEBUG:
-                    log_debug(manager.log_box, f"🧾 {name} 실현손익: {profit}")
+                logger.debug(f"🧾 {name} 실현손익: {profit}")
             except ValueError:
-                if SHOW_DEBUG:
-                    log_debug(manager.log_box, f"⚠️ 실현손익 변환 실패: '{profit_str}'")
+                logger.debug(f"⚠️ 실현손익 변환 실패: '{profit_str}'")
 
         if prev_next == "0":
-            log(manager.log_box, f"💰 [총합 실현손익] {manager.today_profit:,} 원")
+            logger.log(f"💰 [총합 실현손익] {manager.today_profit:,} 원")
             manager.update_ui()
 
     elif rq_name == TR_ORDER_HISTORY:
         table = manager.trade_log_table
         count = manager.api.ocx.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, rq_name)
-        log(manager.log_box, f"📥 체결내역 수신: {count}건")
+        logger.log(f"📥 체결내역 수신: {count}건")
 
         account = manager.last_requested_order_account
 
@@ -131,7 +130,7 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
 
             key = f"{date_str}_{time_str}_{account}_{code}"
             if key in manager.existing_trade_keys:
-                log(manager.log_box, f"⏭️ 중복 기록 생략됨: {key}")
+                logger.log(f"⏭️ 중복 기록 생략됨: {key}")
                 continue
 
             row = [
@@ -152,6 +151,5 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
     elif rq_name == "추정자산조회":
         raw = manager.api.get_comm_data(tr_code, rq_name, 0, "추정예탁자산").strip()
         manager.estimated_asset = to_int(raw.replace(",", ""))
-        log(manager.log_box, f"📈 [추정예탁자산] {manager.estimated_asset:,} 원")
-
+        logger.log(f"📈 [추정예탁자산] {manager.estimated_asset:,} 원")
         manager.update_ui()

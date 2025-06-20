@@ -191,11 +191,56 @@
        </widget>
       </item>
       <item>
-       <layout class="QVBoxLayout">
-        <item><widget class="QLabel" name="log_label"><property name="text"><string>로그</string></property></widget></item>
-        <item><widget class="QTextEdit" name="log_box"><property name="minimumSize"><size><width>400</width><height>200</height></size></property></widget></item>
-       </layout>
-      </item>
+  <layout class="QVBoxLayout">
+    <item>
+      <layout class="QHBoxLayout">
+        <item>
+          <widget class="QCheckBox" name="debug_checkbox">
+            <property name="text">
+              <string>디버그 로그</string>
+            </property>
+            <property name="checked">
+              <bool>true</bool>
+            </property>
+          </widget>
+        </item>
+        <item>
+          <widget class="QCheckBox" name="info_checkbox">
+            <property name="text">
+              <string>일반 로그</string>
+            </property>
+            <property name="checked">
+              <bool>true</bool>
+            </property>
+          </widget>
+        </item>
+        <item>
+          <widget class="QCheckBox" name="trade_checkbox">
+            <property name="text">
+              <string>매매 로그</string>
+            </property>
+            <property name="checked">
+              <bool>true</bool>
+            </property>
+          </widget>
+        </item>
+      </layout>
+    </item>
+    <item>
+      <widget class="QLabel" name="log_label">
+        <property name="text"><string>로그</string></property>
+      </widget>
+    </item>
+    <item>
+      <widget class="QTextEdit" name="log_box">
+        <property name="minimumSize">
+          <size><width>400</width><height>200</height></size>
+        </property>
+      </widget>
+    </item>
+  </layout>
+</item>
+
      </layout>
     </item>
 
