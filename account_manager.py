@@ -145,29 +145,38 @@ class AccountManager:
     def request_all_holdings(self, accounts, on_complete=None):
         self.pending_accounts = set(accounts)
         self.on_holdings_complete = on_complete
-        self._holding_index = 0  # ✅ 내부 인덱스 사용
+        self._holding_index = 0  # ✅ 내부 인덱스 초기화
 
         def request_next():
             if self._holding_index < len(accounts):
                 account = accounts[self._holding_index]
                 self._holding_index += 1
                 self.request_holdings(account)
-                QTimer.singleShot(300, request_next)  # 일정 간격 유지
+                QTimer.singleShot(300, request_next)  # ⏱ 다음 요청 예약
             else:
                 log(self.log_box, "✅ 모든 잔고 요청 전송 완료")
                 self.holdings_loaded = True
 
-                # ✅ 안전한 콜백 호출
+                # ✅ 콜백 안전 호출
                 callback = getattr(self, "on_holdings_complete", None)
                 if callable(callback):
-                    callback()
+                    try:
+                        callback()
+                    except Exception as e:
+                        log(self.log_box, f"[⚠️ 콜백 실행 오류] {e}")
 
-                # ✅ 속성 안전 삭제
-                for attr in ("_holding_index", "on_holdings_complete", "pending_accounts"):
+                # ✅ 일회성 속성 정리 (on_holdings_complete은 None으로만 초기화)
+                for attr in ("_holding_index", "pending_accounts"):
                     if hasattr(self, attr):
-                        delattr(self, attr)
+                        try:
+                            delattr(self, attr)
+                        except Exception as e:
+                            log_debug(self.log_box, f"[⚠️ delattr 실패] {attr} → {e}")
+
+                self.on_holdings_complete = None  # 안전하게 None 처리
 
         request_next()
+
 
     def handle_holdings_response_complete(self, account):
         if hasattr(self, "pending_accounts"):
@@ -314,12 +323,33 @@ class AccountManager:
                 if hasattr(self, "pending_accounts"):
                     self.pending_accounts.discard(self.current_account)
                     print(f"✅ 잔고 수신 완료: {self.current_account} → 남은 대기 계좌: {len(self.pending_accounts)}")
+                    
+                    # ✅ UI에 잔고 수신 계좌 추가
+                    if hasattr(self, "ui") and hasattr(self.ui, "received_balance_accounts"):
+                        self.ui.received_balance_accounts.add(self.current_account)
+
+                        # ✅ 모든 계좌 수신 완료 시 버튼 활성화
+                        if set(self.executor.accounts) == self.ui.received_balance_accounts:
+                            self.ui.log("✅ 잔고 수신 완료 → 매매 시작 버튼 활성화")
+                            self.ui.trade_start_button.setEnabled(True)
+
                     if not self.pending_accounts:
                         log(self.log_box, "✅ 모든 계좌의 잔고 수신 완료")
+
+                        # buy_history 정리
+                        if hasattr(self.executor, "buy_history"):
+                            before = len(self.executor.buy_history)
+                            self.executor.buy_history = {
+                                k: v for k, v in self.executor.buy_history.items() if isinstance(k, tuple)
+                            }
+                            after = len(self.executor.buy_history)
+                            if before != after:
+                                log_debug(self.log_box, f"[⚠️ buy_history 정리] 잘못된 키 제거: {before - after}개")
+
                         if hasattr(self, "on_holdings_complete") and callable(self.on_holdings_complete):
                             self.on_holdings_complete()
-                        self.holdings_loaded = True
 
+                        self.holdings_loaded = True
             return result
 
         # ✅ 관심종목 보완 TR
@@ -350,14 +380,13 @@ class AccountManager:
                     "prev_price": prev
                 }
 
-            # ✅ 조건검색 결과 UI에 전달 (append 및 다음 TR 호출은 controller가 담당)
+            # ✅ 조건검색 결과 UI에 전달
             if hasattr(self, "ui") and hasattr(self.ui, "condition_controller"):
                 self.ui.condition_controller.handle_condition_tr_result(code, name, prev, curr, rate)
 
             return
 
-
-        # ✅ 매수/매도 요청 후 응답 처리 (현재는 단순 로그만)
+        # ✅ 매수/매도 요청 후 응답 처리
         elif rq_name in ("매수", "매도"):
             log(self.log_box, f"✅ 주문 요청 응답 수신 → rq_name: {rq_name} (체결은 chejan_data에서 처리)")
             return
@@ -365,6 +394,7 @@ class AccountManager:
         # ⚠️ 그 외 rq_name 무시
         if SHOW_DEBUG:
             log_debug(self.log_box, f"[⚠️ 무시됨] AccountManager.handle_tr_data(): rq_name={rq_name} 은 처리 대상 아님")
+
 
     def update_ui(self):
         if self.account_info_label:
@@ -436,3 +466,8 @@ class AccountManager:
             if acc == account:
                 return screen_no
         return ""
+    
+    def on_holdings_complete(self):
+        if hasattr(self, "executor") and self.executor:
+            log_debug(self.log_box, "📦 보유 종목 기반으로 buy_history 복원 시작")
+            self.executor.reconstruct_buy_history_from_holdings()

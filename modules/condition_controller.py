@@ -137,37 +137,45 @@ class ConditionSearchController:
         self.fetch_next_condition_stock()
 
     def on_receive_condition_result(self, screen_no, condition_name, condition_index, code_list_str, type_flag, condition_type):
-        codes = code_list_str.strip().split(';')
-        codes = [code for code in codes if code]
-
-        self.log(f"✅ 조건 '{condition_name}' 결과 수신: {len(codes)}건, 실시간 등록 및 TR 조회 시작")
+        codes = code_list_str.split(";") if code_list_str else []
+        codes = [code.strip() for code in codes if code.strip()]
+        self.log(f"[🔍 조건검색 결과 수신] {len(codes)}개 종목 (조건: {condition_name})")
 
         for code in codes:
-            self.api.request_basic_info(code)
+            self.api.request_basic_info(code)  # 종목명, 전일종가, 현재가 요청
 
-            if self.executor and self.executor.condition_auto_buy:
-                step = 1
-                account = self.executor.get_account_by_step(step)
-                buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
-                amount = buy_conf.get("amount", 0)
-                enabled = buy_conf.get("enabled", False)
-                order_type = self.executor.buy_settings.get("order_type", "시장가")
+            # ✅ 자동매수 OFF인 경우 매수 생략
+            if not self.executor or not self.executor.condition_auto_buy:
+                self.log(f"[⏸ 조건검색 자동매수 OFF] {code} 매수 생략")
+                continue
 
-                if not enabled or amount <= 0:
-                    continue
+            step = 1
+            account = self.executor.get_account_by_step(step)
+            buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
+            amount = buy_conf.get("amount", 0)
+            enabled = buy_conf.get("enabled", False)
+            order_type = self.executor.buy_settings.get("order_type", "시장가")
 
-                if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
-                    self.log(f"[조건매수 스킵] {code}: 계좌1 보유 중")
-                    continue
-                if (code, account) in self.executor.pending_buys:
-                    self.log(f"[조건매수 스킵] {code}: 체결 대기 중")
-                    continue
+            if not enabled:
+                self.log(f"[⏸ 조건매수 비활성화] {code} / 계좌1 사용 안함")
+                continue
+            if amount <= 0:
+                self.log(f"[⏸ 조건매수 금액 미지정] {code} / 매수금액 0원")
+                continue
 
-                price = self.api.get_master_last_price(code)
-                name = self.api.get_master_code_name(code)
+            if self.executor.holdings.get(code, {}).get(account, {}).get("qty", 0) > 0:
+                self.log(f"[⏸ 조건매수 스킵] {code}: 계좌1 보유 중")
+                continue
+            if (code, account) in self.executor.pending_buys:
+                self.log(f"[⏸ 조건매수 스킵] {code}: 체결 대기 중")
+                continue
 
-                self.log(f"[조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
-                self.executor.send_buy_order(code, account, price, amount, order_type, step)
+            price = self.api.get_master_last_price(code)
+            name = self.api.get_master_code_name(code)
+
+            self.log(f"[📥 조건검색 실시간 매수] {code} / {name} / 현재가 {price:,} / 금액 {amount:,}")
+            self.executor.send_buy_order(code, account, price, amount, order_type, step)
+
 
     def on_receive_real_condition(self, screen_no, code, event_type, condition_name):
         if event_type != "I":

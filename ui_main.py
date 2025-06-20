@@ -161,6 +161,8 @@ class AutoTradeUI(QMainWindow):
         self.setup_menu_actions()
         self.refresh_schedule_dropdown_main()
         self.connect_signals()
+        self.received_balance_accounts = set()
+        self.trade_start_button.setEnabled(False)
 
     def setup_fonts(self):
         self.setFont(QFont("맑은 고딕", 8))

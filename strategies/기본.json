@@ -1,12 +1,12 @@
 {
   "buy": {
     "order_type": "지정가",
-    "test_mode": false,
+    "test_mode": true,
     "accounts": {
       "계좌1": {
         "enabled": true,
         "amount": 10000.0,
-        "drop_rate": -10.0
+        "drop_rate": -1.5
       },
       "계좌2": {
         "enabled": true,
