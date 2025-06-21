@@ -213,8 +213,9 @@ class AutoTradeUI(QMainWindow):
     def setup_config(self):
         self.config = load_user_config()
 
-        # 🔄 기존 함수는 제거
-        # update_debug_flags(self.config) ← 삭제
+        # ✅ 설정에서 최대보유종목 수 불러오기 (기본값: 20)
+        max_holdings_str = self.config.get("max_holdings", "20")
+        self.max_holdings_input.setText(max_holdings_str)
 
         # ✅ LogManager에 설정 반영
         if hasattr(self, "logger"):
@@ -303,7 +304,8 @@ class AutoTradeUI(QMainWindow):
         self.sell_profit_inputs = [sell_box.findChild(QLineEdit, f"sell_profit_input_{i+1}") for i in range(4)]
 
         self.max_holdings_input = self.findChild(QLineEdit, "max_holdings_input")
-        self.max_holdings_input.setText("20")
+        max_holdings_str = self.config.get("max_holdings", "20")
+        self.max_holdings_input.setText(max_holdings_str)
         self.max_holdings_input.setMaximumWidth(40)
         self.max_holdings_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.max_holdings_input.setAlignment(Qt.AlignCenter)
@@ -893,10 +895,14 @@ class AutoTradeUI(QMainWindow):
         buy_conf = self.executor.buy_settings.get("accounts", {}).get("계좌1", {})
         amount = buy_conf.get("amount", 0)
 
-        # ✅ 지정가 사용
-        order_type_ui = "지정가"
-        s_order_type = 1
-        s_hoga = "00"
+        # ✅ 드롭다운에서 주문 유형 가져오기
+        order_type_ui = self.buy_order_type_combo.currentText()  # "시장가" 또는 "지정가"
+        if order_type_ui == "시장가":
+            s_order_type = 1
+            s_hoga = "03"
+        else:
+            s_order_type = 1
+            s_hoga = "00"
 
         # ✅ 현재가 및 종목명
         info = self.basic_info_map.get(code, {})
@@ -912,31 +918,38 @@ class AutoTradeUI(QMainWindow):
             self.logger.log(f"❌ {code} 매수 실패: 전략 설정 금액 없음")
             return
 
+        # ✅ 매수 확인창 메시지
         confirm = QMessageBox.question(
-            self.window(),  # 명확한 parent 설정
+            self.window(),
             "매수 확인",
-            f"[{code} - {name}]\n현재가 {current_price:,}원에\n{amount:,}원 **지정가** 매수 진행할까요?",
+            f"[{code} - {name}]\n현재가 {current_price:,}원에\n"
+            f"{'1주' if self.executor.test_mode else f'{amount:,}원'} **{order_type_ui}** 매수 진행할까요?",
             QMessageBox.Yes | QMessageBox.No,
         )
 
         if confirm == QMessageBox.Yes:
-            qty = max(int(amount // current_price), 1)
+            # ✅ 수량 결정
+            if self.executor.test_mode:
+                qty = 1
+                self.logger.log(f"[🧪 1주 테스트모드] 수동매수: {code} / 계좌: {account} / 1주 매수 실행")
+            else:
+                qty = max(int(amount // current_price), 1)
+
             s_rqname = f"수동매수:{code}"
             s_screen = "9999"
             s_account = account
-            s_price = int(current_price)
+            s_price = 0 if s_hoga == "03" else int(current_price)  # 시장가이면 가격 0
 
             if self.logger.debug_enabled:
                 self.logger.debug(f"📡 SendOrder 호출됨:\n"
                                 f"  📄 rqname      = {s_rqname}\n"
                                 f"  🖥 screen_no   = {s_screen}\n"
                                 f"  💳 acc_no      = {s_account}\n"
-                                f"  🔁 order_type  = {s_order_type} (1: 지정가)\n"
+                                f"  🔁 order_type  = {s_order_type} ({order_type_ui})\n"
                                 f"  🧾 code        = {code}\n"
                                 f"  🔢 qty         = {qty}\n"
                                 f"  💰 price       = {s_price}\n"
                                 f"  🎯 hoga        = {s_hoga}")
-
 
             res = self.api.send_order(
                 rqname=s_rqname,
@@ -951,7 +964,7 @@ class AutoTradeUI(QMainWindow):
             )
 
             self.executor.pending_buys.add((code, account))
-            self.logger.log(f"🛒 수동매수: {code} | {qty}주 | 지정가 | 계좌: {s_account}")
+            self.logger.log(f"🛒 수동매수: {code} | {qty}주 | {order_type_ui} | 계좌: {s_account}")
 
             # ✅ 상태 갱신
             if hasattr(self, "stock_search_table"):
@@ -960,6 +973,8 @@ class AutoTradeUI(QMainWindow):
             # ✅ 잔고 갱신 요청
             if hasattr(self.manager, "request_holdings"):
                 self.manager.request_holdings(s_account)
+
+
 
     def handle_strategy_selected(self, strategy_name):
         strategy = load_strategy(strategy_name, self.logger)  # 🟢 logger로 변경
@@ -1231,6 +1246,8 @@ class AutoTradeUI(QMainWindow):
             return
 
         self.config = dialog.get_config()
+        # ✅ 최대보유종목 수 저장
+        self.config["max_holdings"] = self.max_holdings_input.text().strip()
         save_user_config(self.config)
         self.logger.update_flags(self.config)
         self.logger.log("✅ 설정 저장 완료")
@@ -1279,6 +1296,7 @@ class AutoTradeUI(QMainWindow):
             QMessageBox.information(self, "설정 완료", "✅ 설정이 완료되었습니다. 프로그램을 시작할 수 있습니다.")
         else:
             QMessageBox.information(self, "설정 적용됨", "✅ 설정이 저장되었습니다.\n프로그램을 재시작하면 디버그 모드가 적용됩니다.")
+            
     def on_debug_filter_changed(self, checked):
         self.logger.filter_debug = checked
         self.logger.apply_filters()

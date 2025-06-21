@@ -189,78 +189,101 @@
         </widget>
        </widget>
       </item>
-      <item> <!-- ✅ 로그 영역 전체를 하나의 item으로 감쌈 -->
-        <layout class="QVBoxLayout" name="log_area_layout">
+      
+      
+      
+     <item> <!-- ✅ 로그 영역 전체를 하나의 item으로 감쌈 -->
+  <layout class="QVBoxLayout" name="log_area_layout">
 
-          <!-- ✅ 로그 제목 + 체크박스들을 한 줄에 배치 -->
-          <item>
-            <layout class="QHBoxLayout">
-              <item>
-                <widget class="QLabel" name="log_label">
-                  <property name="text"><string>로그</string></property>
-                </widget>
-              </item>
-              <item>
-                <widget class="QCheckBox" name="debug_checkbox">
-                  <property name="text"><string>디버그 로그</string></property>
-                  <property name="checked"><bool>true</bool></property>
-                </widget>
-              </item>
-              <item>
-                <widget class="QCheckBox" name="info_checkbox">
-                  <property name="text"><string>일반 로그</string></property>
-                  <property name="checked"><bool>true</bool></property>
-                </widget>
-              </item>
-              <item>
-                <widget class="QCheckBox" name="trade_checkbox">
-                  <property name="text"><string>매매 로그</string></property>
-                  <property name="checked"><bool>true</bool></property>
-                </widget>
-              </item>
-              <!-- ⛱ 여유 공간을 오른쪽으로 밀기 위한 stretch -->
-              <item>
-                <spacer name="log_h_spacer">
-                  <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                    <size>
-                      <width>40</width>
-                      <height>20</height>
-                    </size>
-                  </property>
-                </spacer>
-              </item>
-            </layout>
-          </item>
+    <!-- ✅ 로그 제목 + 체크박스들을 한 줄에 배치 -->
+    <item>
+      <layout class="QHBoxLayout">
+        <item>
+          <widget class="QLabel" name="log_label">
+            <property name="text">
+              <string>로그</string>
+            </property>
+          </widget>
+        </item>
+        <item>
+          <widget class="QCheckBox" name="debug_checkbox">
+            <property name="text">
+              <string>디버그 로그</string>
+            </property>
+            <property name="checked">
+              <bool>true</bool>
+            </property>
+          </widget>
+        </item>
+        <item>
+          <widget class="QCheckBox" name="info_checkbox">
+            <property name="text">
+              <string>일반 로그</string>
+            </property>
+            <property name="checked">
+              <bool>true</bool>
+            </property>
+          </widget>
+        </item>
+        <item>
+          <widget class="QCheckBox" name="trade_checkbox">
+            <property name="text">
+              <string>매매 로그</string>
+            </property>
+            <property name="checked">
+              <bool>true</bool>
+            </property>
+          </widget>
+        </item>
+        <item>
+          <spacer name="log_h_spacer">
+            <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+              <size>
+                <width>40</width>
+                <height>20</height>
+              </size>
+            </property>
+          </spacer>
+        </item>
+      </layout>
+    </item>
 
-          <!-- ✅ 로그 출력창 -->
-          <item>
-            <widget class="QTextEdit" name="log_box">
-              <property name="minimumSize">
-                <size><width>400</width><height>200</height></size>
-              </property>
-            </widget>
-          </item>
+    <!-- ✅ 로그 출력창 -->
+    <item>
+      <widget class="QTextEdit" name="log_box">
+        <property name="minimumSize">
+          <size>
+            <width>400</width>
+            <height>200</height>
+          </size>
+        </property>
+      </widget>
+    </item>
 
-          <!-- ✅ 아래쪽 마진 -->
-          <item>
-            <spacer name="bottomSpacer">
-              <property name="orientation">
-                <enum>Qt::Vertical</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-                <size><width>20</width><height>10</height></size>
-              </property>
-            </spacer>
-          </item>
-
-        </layout> <!-- ✅ log_area_layout 닫힘 -->
-      </item> <!-- ✅ log_area_layout 를 감싼 item 닫힘 -->
-
-    </layout> <!-- ✅ watchlist_and_log_layout 닫힘 -->
-  </item> <!-- ✅ watchlist_and_log_layout item 닫힘 -->
+    <!-- ✅ 아래쪽 마진용 spacer (고정 크기, 비확장) -->
+    <item>
+      <spacer name="bottomSpacer">
+        <property name="orientation">
+          <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeType">
+          <enum>QSizePolicy::Fixed</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+          <size>
+            <width>20</width>
+            <height>5</height>
+          </size>
+        </property>
+      </spacer>
+    </item>
+     </layout> <!-- ✅ log_area_layout 닫힘 -->
+   </item>     <!-- ✅ log_area_layout 감싼 item 닫힘 -->
+ </layout>     <!-- ✅ watchlist_and_log_layout 닫힘 -->
+</item>        <!-- ✅ watchlist_and_log_layout 감싼 item 닫힘 -->
 
 </layout> <!-- ✅ main_layout 닫힘 -->
 </widget> <!-- ✅ centralwidget 닫힘 -->
