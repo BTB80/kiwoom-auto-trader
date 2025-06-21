@@ -258,32 +258,37 @@ class AccountManager:
 
         current_account = self.current_account  # 현재 선택된 계좌
 
-        for code in list(self.holdings.keys()):  # 키 목록 복사하여 반복
+        for code in list(self.holdings.keys()):
             account_data = self.holdings[code]
 
             if current_account not in account_data:
-                continue  # 선택된 계좌가 이 종목을 보유하지 않음
+                continue  # 이 계좌가 보유 중이지 않으면 생략
 
             h = account_data[current_account]
             name = h.get("name", "")
             qty = h.get("qty", 0)
             buy = h.get("buy_price", 0)
             current = h.get("current", 0)
+            rate_of_change = h.get("rate_of_change", 0.0)  # 등락률
 
-            # ✅ 수량이 0인 경우 holdings에서 제거
+            # 수량이 0이면 holdings에서 제거
             if qty <= 0:
                 del self.holdings[code][current_account]
-                if not self.holdings[code]:  # 종목 전체 계좌가 비었으면 제거
+                if not self.holdings[code]:
                     del self.holdings[code]
-                continue  # UI에도 출력 생략
+                continue
 
             buy_amt = buy * qty
-            eval_amt = qty * current
+            eval_amt = current * qty
             profit = eval_amt - buy_amt
             rate = ((current - buy) / buy * 100) if buy else 0.0
 
             self.total_buy += buy_amt
             self.total_eval += eval_amt
+
+            # 색상 설정
+            roc_color = Qt.red if rate_of_change > 0 else Qt.blue if rate_of_change < 0 else Qt.black
+            rate_color = Qt.red if rate > 0 else Qt.blue if rate < 0 else Qt.black
 
             row = self.holdings_table.rowCount()
             self.holdings_table.insertRow(row)
@@ -295,35 +300,32 @@ class AccountManager:
                     item.setForeground(color)
                 return item
 
-            # 종목명
+            # 테이블에 데이터 삽입
             self.holdings_table.setItem(row, 0, create_item(name, Qt.AlignCenter))
-
-            # 수량, 매입가, 현재가
             self.holdings_table.setItem(row, 1, create_item(f"{qty:,}"))
             self.holdings_table.setItem(row, 2, create_item(f"{buy:,}"))
             self.holdings_table.setItem(row, 3, create_item(f"{current:,}"))
-            # ✅ 목표단가 계산 및 표시
+            self.holdings_table.setItem(row, 4, create_item(f"{rate_of_change:.2f}%", color=roc_color))
+
+            # 목표단가
             alias = self.get_alias_by_account(current_account)
             sell_conf = self.executor.sell_settings.get("accounts", {}).get(alias, {})
             target_price = 0
             if sell_conf.get("enabled"):
                 profit_rate = sell_conf.get("profit_rate", 0.0)
                 target_price = int(buy * (1 + profit_rate / 100))
+            self.holdings_table.setItem(row, 5, create_item(f"{target_price:,}" if target_price else "-"))
 
-            self.holdings_table.setItem(row, 4, create_item(f"{target_price:,}" if target_price else "-"))
-            # 수익률
-            color = Qt.red if rate > 0 else Qt.blue if rate < 0 else Qt.black
-            self.holdings_table.setItem(row, 5, create_item(f"{rate:.2f}%", color=color))
-
-            # 매입금액, 평가금액, 평가손익
-            self.holdings_table.setItem(row, 6, create_item(f"{buy_amt:,}"))
-            self.holdings_table.setItem(row, 7, create_item(f"{eval_amt:,}"))
-            self.holdings_table.setItem(row, 8, create_item(f"{profit:+,}", color=color))
-
-
+            self.holdings_table.setItem(row, 6, create_item(f"{rate:.2f}%", color=rate_color))
+            self.holdings_table.setItem(row, 7, create_item(f"{buy_amt:,}"))
+            self.holdings_table.setItem(row, 8, create_item(f"{eval_amt:,}"))
+            self.holdings_table.setItem(row, 9, create_item(f"{profit:+,}", color=rate_color))
 
         self.update_ui()
-        self.holdings_table.viewport().update()  # ✅ 강제 리렌더링
+        self.holdings_table.viewport().update()
+
+
+
 
     def handle_tr_data(self, scr_no, rq_name, tr_code, record_name, prev_next):
         if self.logger.debug_enabled:

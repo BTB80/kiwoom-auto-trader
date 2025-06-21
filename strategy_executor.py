@@ -87,27 +87,17 @@ class AutoTradeExecutor(ChejanHandlerMixin):
 
                 if self.logger.verbose_buy:
                     self.logger.debug(
-
                         f"[👁 선행확인] step={step} / 이전계좌={prev_acc} / "
                         f"보유={prev_qty}, pending={prev_pending}, history={prev_in_history}"
-                    
-)
+                    )
 
                 if prev_qty <= 0 and not prev_pending and not prev_in_history:
-                    self.logger.debug(
-
-                        f"[⛔ 선행계좌 조건 미충족] step={step} / 이전계좌={prev_acc} → 평가 중단"
-                    
-)
+                    self.logger.debug(f"[⛔ 선행계좌 조건 미충족] step={step} / 이전계좌={prev_acc} → 평가 중단")
                     break  # ❌ 이후 step 평가 중단
 
                 # ✅ 선행계좌가 보유는 있는데 price 정보 없음
                 if prev_qty > 0 and (code, prev_acc) not in self.buy_history:
-                    self.logger.debug(
-
-                        f"[❌ 선행계좌 가격 없음] {code} / 이전계좌: {prev_acc} → 생략"
-                    
-)
+                    self.logger.debug(f"[❌ 선행계좌 가격 없음] {code} / 이전계좌: {prev_acc} → 생략")
                     break
 
             # ✅ 실제 매수 조건 검사
@@ -124,7 +114,13 @@ class AutoTradeExecutor(ChejanHandlerMixin):
 
 
 
+
     def can_buy(self, code, account_no, acc_conf, step, current_price):
+        # 조건검색 자동매수 활성화 상태에서 하락률을 무시하고 바로 매수
+        if self.executor.condition_auto_buy:
+            self.log_once(f"[📥 조건검색 자동매수] {code} / 계좌={account_no} → 하락률 무시하고 매수 실행")
+            return True  # 하락률 무시하고 매수 실행
+
         if (code, account_no) in self.pending_buys:
             self.log_once(f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
             return False
@@ -139,7 +135,7 @@ class AutoTradeExecutor(ChejanHandlerMixin):
 
         drop_rate = acc_conf.get("drop_rate", 0)
 
-        # ✅ 기준가 결정
+        # 기준가 결정
         if step == 1:
             prev_price = self.get_previous_close(code)
             if not prev_price:
@@ -150,7 +146,7 @@ class AutoTradeExecutor(ChejanHandlerMixin):
             buy_info = self.buy_history.get((code, prev_account), {})
             prev_price = buy_info.get("price")
 
-            # 🔍 디버깅 로그
+            # 디버깅 로그
             self.log_once(f"[🔍 기준가 검사] step={step}, code={code}, prev_acc={prev_account}, prev_price={prev_price}, current={current_price}")
 
             if not prev_price or prev_price <= 0:
@@ -163,7 +159,7 @@ class AutoTradeExecutor(ChejanHandlerMixin):
 
         rate = (prev_price - current_price) / prev_price * 100
 
-        # 🔍 하락률 디버그 로그
+        # 하락률 디버그 로그
         self.log_once(
             f"[📉 하락률 평가] {code} / 기준가: {prev_price} / 현재가: {current_price} / "
             f"하락률: {rate:.2f}% / 필요조건: {drop_rate}%"
@@ -174,6 +170,7 @@ class AutoTradeExecutor(ChejanHandlerMixin):
             return False
 
         return True
+
 
 
 

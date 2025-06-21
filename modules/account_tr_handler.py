@@ -44,13 +44,20 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
             qty = to_int(manager.api.get_comm_data(tr_code, rq_name, index, "보유수량"))
             buy = to_int(manager.api.get_comm_data(tr_code, rq_name, index, "매입가"))
             price = to_int(manager.api.get_comm_data(tr_code, rq_name, index, "현재가"))
+            prev_price = to_int(manager.api.get_comm_data(tr_code, rq_name, index, "전일종가"))
 
-            logger.debug(f"[잔고TR] {code} / qty={qty} / buy={buy} / current={price}")
+            # Calculate rate of change (등락률)
+            rate_of_change = ((price - prev_price) / prev_price * 100) if prev_price else 0.0
+
+            logger.debug(f"[잔고TR] {code} / qty={qty} / buy={buy} / current={price} / prev={prev_price} / rate_of_change={rate_of_change:.2f}%")
+            
+            # Store the data along with rate_of_change
             manager.holdings.setdefault(code, {})[account] = {
                 "name": name,
                 "qty": qty,
                 "buy_price": buy,
-                "current": price
+                "current": price,
+                "rate_of_change": rate_of_change  # Store rate of change here
             }
 
             if hasattr(manager, "executor") and manager.executor:
@@ -59,7 +66,7 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
                     "price": price
                 }
 
-            logger.debug(f"➡️ {code} {name} (계좌: {account}) qty:{qty} buy:{buy} price:{price}")
+            logger.debug(f"➡️ {code} {name} (계좌: {account}) qty:{qty} buy:{buy} price:{price} rate_of_change:{rate_of_change:.2f}%")
 
         manager.refresh_holdings_ui()
 
@@ -87,6 +94,7 @@ def handle_account_tr_data(manager, scr_no, rq_name, tr_code, record_name, prev_
 
         if hasattr(manager, "handle_holdings_response_complete"):
             manager.handle_holdings_response_complete(account)
+
 
     elif rq_name == TR_TODAY_PROFIT:
         count = manager.api.ocx.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, rq_name)

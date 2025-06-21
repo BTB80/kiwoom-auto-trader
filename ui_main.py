@@ -242,20 +242,36 @@ class AutoTradeUI(QMainWindow):
         self.log_box = self.findChild(QTextEdit, "log_box")
         self.log_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        # ✅ log_box 스타일 설정
+        self.log_box.setStyleSheet("""
+            QTextEdit {
+                background-color: black;
+                color: white;
+                font-family: Consolas, monospace;
+                font-size: 12px;
+            }
+        """)
+
+        # ✅ logger에 log_box 연결
         if hasattr(self, "logger") and self.logger:
             self.logger.set_log_box(self.log_box)
 
+        # ✅ log_label 스타일 및 정렬
         log_label = self.findChild(QLabel, "log_label")
         if log_label:
             log_label.setStyleSheet(LABEL_STYLE)
             log_label.setAlignment(Qt.AlignLeft)
 
-            log_container = log_label.parentWidget()
-            if log_container:
-                layout = log_container.layout()
-                if layout:
-                    layout.setContentsMargins(10, 0, 10, 10)
-                    
+        # ✅ log_box가 속한 레이아웃의 마진 직접 설정
+        if self.log_box:
+            ancestor = self.log_box.parentWidget()
+            while ancestor and not ancestor.layout():
+                ancestor = ancestor.parentWidget()
+
+            if ancestor and ancestor.layout():
+                ancestor.layout().setContentsMargins(10, 0, 10, 10)  # 좌, 상, 우, 하
+
+        # ✅ 로그 필터 체크박스 설정
         self.debug_checkbox = self.findChild(QCheckBox, "debug_checkbox")
         self.info_checkbox = self.findChild(QCheckBox, "info_checkbox")
         self.trade_checkbox = self.findChild(QCheckBox, "trade_checkbox")
@@ -267,6 +283,7 @@ class AutoTradeUI(QMainWindow):
         self.debug_checkbox.toggled.connect(self.on_debug_filter_changed)
         self.info_checkbox.toggled.connect(self.on_info_filter_changed)
         self.trade_checkbox.toggled.connect(self.on_trade_filter_changed)
+
 
     def setup_account_sections(self):
         buy_box = create_buy_settings_groupbox()
@@ -375,6 +392,7 @@ class AutoTradeUI(QMainWindow):
         self.login_button.clicked.connect(self.login)
         self.trade_start_button.clicked.connect(self.handle_trade_start)
         self.trade_stop_button.clicked.connect(self.handle_trade_stop)
+        self.buy_test_mode_checkbox.toggled.connect(self.on_test_mode_toggled)
         self.view_all_holdings_button.clicked.connect(self.show_all_holdings_popup)
         self.watchlist_button.clicked.connect(
             lambda: self.watchlist_controller.load_watchlist_from_google(self.sheet_id, self.sheet_name)
@@ -431,21 +449,31 @@ class AutoTradeUI(QMainWindow):
                 btn.setCheckable(True)
 
     def setup_holdings_table(self):
+        # holdings_table 위젯을 찾는 부분
         self.holdings_table = self.findChild(QTableWidget, "holdings_table")
         if self.holdings_table:
-            self.holdings_table.setColumnCount(9)
+            # 열 수를 10으로 설정 (기존 9개에서 1개 추가)
+            self.holdings_table.setColumnCount(10)
+
+            # 열 제목을 10개로 설정 (등락률(%) 추가)
             self.holdings_table.setHorizontalHeaderLabels([
-                "종목명", "보유수량", "매입가", "현재가", "목표단가",
-                "수익률(%)", "매입금액", "평가금액", "평가손익"
-            ])
+                "종목명", "보유수량", "매입가", "현재가","등락률(%)", "목표단가", 
+                "수익률(%)",  "매입금액", "평가금액", "평가손익"
+            ])  # 새로운 열 제목으로 '등락률(%)'을 추가
+
+            # 편집 불가 설정
             self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+            # 열 크기 자동 조정
             self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.holdings_table.verticalHeader().setDefaultSectionSize(30)
             self.holdings_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+            # holdings_table을 manager에 연결
             self.manager.holdings_table = self.holdings_table
         else:
             self.logger.log("❌ 'holdings_table' 위젯을 찾을 수 없습니다.")
+
 
     def setup_stock_search_table(self):
         self.stock_search_table = self.findChild(QTableWidget, "stock_search_table")
@@ -563,7 +591,11 @@ class AutoTradeUI(QMainWindow):
                     font-size: 12px;
                 }
             """)
-
+    def on_test_mode_toggled(self, checked):
+        if hasattr(self, "executor"):
+            self.executor.test_mode = checked
+        status = "✅ [1주 매수 테스트 모드] 활성화됨" if checked else "🛑 [1주 매수 테스트 모드] 비활성화됨"
+        self.logger.log(status)
 
     def set_buy_settings_to_ui(self, buy_data):
         self.buy_order_type_combo.setCurrentText(buy_data.get("order_type", "시장가"))
