@@ -98,7 +98,7 @@ QPushButton:hover {
 """
 LABEL_STYLE = """
 QLabel {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: bold;
     color: #333;
 }
@@ -237,7 +237,7 @@ class AutoTradeUI(QMainWindow):
         self.setup_condition_table()
         self.setup_unsettled_table()
         self.setup_trade_log_table()
-        self.setup_table_fonts()
+        
 
     def setup_log(self):
         self.log_box = self.findChild(QTextEdit, "log_box")
@@ -299,6 +299,9 @@ class AutoTradeUI(QMainWindow):
         self.buy_drop_inputs = [buy_box.findChild(QLineEdit, f"buy_drop_input_{i+1}") for i in range(4)]
 
         self.sell_order_type_combo = sell_box.findChild(QComboBox, "sell_order_type_combo")
+        if self.sell_order_type_combo:
+            self.sell_order_type_combo.setMinimumWidth(120)
+            self.sell_order_type_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.sell_account_buttons = [sell_box.findChild(QPushButton, f"sell_account_button_{i+1}") for i in range(4)]
         self.sell_ratio_inputs = [sell_box.findChild(QLineEdit, f"sell_ratio_input_{i+1}") for i in range(4)]
         self.sell_profit_inputs = [sell_box.findChild(QLineEdit, f"sell_profit_input_{i+1}") for i in range(4)]
@@ -352,8 +355,8 @@ class AutoTradeUI(QMainWindow):
 
         layout = self.findChild(QHBoxLayout, "topInfoLayout")
         if layout:
-            layout.setStretch(0, 1)
-            layout.setStretch(1, 1)
+            layout.setStretch(0, 2)
+            layout.setStretch(1, 2)
             layout.setStretch(2, 3)
             layout.setStretch(3, 3)
 
@@ -454,24 +457,15 @@ class AutoTradeUI(QMainWindow):
         # holdings_table 위젯을 찾는 부분
         self.holdings_table = self.findChild(QTableWidget, "holdings_table")
         if self.holdings_table:
-            # 열 수를 10으로 설정 (기존 9개에서 1개 추가)
             self.holdings_table.setColumnCount(10)
-
-            # 열 제목을 10개로 설정 (등락률(%) 추가)
             self.holdings_table.setHorizontalHeaderLabels([
                 "종목명", "보유수량", "매입가", "현재가","등락률(%)", "목표단가", 
                 "수익률(%)",  "매입금액", "평가금액", "평가손익"
-            ])  # 새로운 열 제목으로 '등락률(%)'을 추가
-
-            # 편집 불가 설정
+            ]) 
             self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
-
-            # 열 크기 자동 조정
             self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             self.holdings_table.verticalHeader().setDefaultSectionSize(30)
             self.holdings_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-            # holdings_table을 manager에 연결
             self.manager.holdings_table = self.holdings_table
         else:
             self.logger.log("❌ 'holdings_table' 위젯을 찾을 수 없습니다.")
@@ -536,21 +530,9 @@ class AutoTradeUI(QMainWindow):
         else:
             self.logger.log("❌ 'trade_log_table' 위젯을 찾을 수 없습니다.")
 
-    def setup_table_fonts(self):
-        font_header = QFont("맑은 고딕", 8)
-        for table in [
-            self.holdings_table,
-            self.stock_search_table,
-            self.condition_table,
-            self.unsettled_table,
-            self.trade_log_table
-        ]:
-            if table:
-                table.horizontalHeader().setFont(font_header)
-                
     def setup_table_styles(self):
-        font_header = QFont("맑은 고딕", 9)  # 헤더: 굵고 크게
-        font_body = QFont("맑은 고딕", 10)   # 본문: 일반 크기
+        font_header = QFont("맑은 고딕", 9)
+        font_body = QFont("맑은 고딕", 9)
 
         tables = [
             self.holdings_table,
@@ -561,29 +543,20 @@ class AutoTradeUI(QMainWindow):
         ]
 
         for table in tables:
-            if table is None:
-                continue
+            if table:
+                table.setFont(font_body)
+                table.horizontalHeader().setFont(font_header)
+                table.setStyleSheet("""
+                    QTableWidget {
+                        background-color: #f0f0f0;
+                    }
+                    QHeaderView::section {
+                        background-color: #e6e6e6;
+                        padding: 2px;
+                        border: 1px solid #aaa;
+                    }
+                """)
 
-            # 본문 글꼴 설정
-            table.setFont(font_body)
-
-            # 헤더 글꼴 설정 (수평 헤더만 조정)
-            header = table.horizontalHeader()
-            header.setFont(font_header)
-
-            # 스타일 보완 (색상만 스타일시트로)
-            table.setStyleSheet("""
-                QTableWidget {
-                    background-color: #f0f0f0;
-                }
-                QHeaderView::section {
-                    background-color: #e6e6e6;
-                    padding: 2px;
-                    border: 1px solid #aaa;
-                }
-            """)
-
-        # 로그창 스타일은 그대로 유지
         if hasattr(self, "log_box") and self.log_box:
             self.log_box.setStyleSheet("""
                 QTextEdit {
@@ -593,6 +566,8 @@ class AutoTradeUI(QMainWindow):
                     font-size: 12px;
                 }
             """)
+
+
     def on_test_mode_toggled(self, checked):
         if hasattr(self, "executor"):
             self.executor.test_mode = checked
