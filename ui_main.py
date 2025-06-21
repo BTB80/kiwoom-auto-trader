@@ -303,7 +303,7 @@ class AutoTradeUI(QMainWindow):
         self.sell_profit_inputs = [sell_box.findChild(QLineEdit, f"sell_profit_input_{i+1}") for i in range(4)]
 
         self.max_holdings_input = self.findChild(QLineEdit, "max_holdings_input")
-        self.max_holdings_input.setText("10")
+        self.max_holdings_input.setText("20")
         self.max_holdings_input.setMaximumWidth(40)
         self.max_holdings_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.max_holdings_input.setAlignment(Qt.AlignCenter)

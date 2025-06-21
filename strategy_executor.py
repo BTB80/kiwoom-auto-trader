@@ -116,10 +116,22 @@ class AutoTradeExecutor(ChejanHandlerMixin):
 
 
     def can_buy(self, code, account_no, acc_conf, step, current_price):
-        # 조건검색 자동매수 활성화 상태에서 하락률을 무시하고 바로 매수
+        # ✅ 조건검색 자동매수 → 하락률 무시
         if self.executor.condition_auto_buy:
             self.log_once(f"[📥 조건검색 자동매수] {code} / 계좌={account_no} → 하락률 무시하고 매수 실행")
-            return True  # 하락률 무시하고 매수 실행
+            return True
+
+        # ✅ 계좌1 종목 수 제한 체크 (step 1에만 적용)
+        if step == 1:
+            try:
+                max_holdings = int(self.manager.ui.max_holdings_input.text())
+            except:
+                max_holdings = 10  # 기본값
+
+            current_holdings = sum(1 for c in self.holdings if account_no in self.holdings[c])
+            if current_holdings >= max_holdings:
+                self.log_once(f"[⛔ 계좌1 최대보유종목 초과] 현재 {current_holdings}개 / 제한 {max_holdings}개 → 매수 생략")
+                return False
 
         if (code, account_no) in self.pending_buys:
             self.log_once(f"[⛔ 체결대기] {code} / 계좌={account_no} → 생략")
@@ -135,7 +147,7 @@ class AutoTradeExecutor(ChejanHandlerMixin):
 
         drop_rate = acc_conf.get("drop_rate", 0)
 
-        # 기준가 결정
+        # 기준가 설정
         if step == 1:
             prev_price = self.get_previous_close(code)
             if not prev_price:
@@ -145,10 +157,7 @@ class AutoTradeExecutor(ChejanHandlerMixin):
             prev_account = self.get_account_by_step(step - 1)
             buy_info = self.buy_history.get((code, prev_account), {})
             prev_price = buy_info.get("price")
-
-            # 디버깅 로그
             self.log_once(f"[🔍 기준가 검사] step={step}, code={code}, prev_acc={prev_account}, prev_price={prev_price}, current={current_price}")
-
             if not prev_price or prev_price <= 0:
                 self.log_once(f"[❌ 선행계좌 가격 없음] {code} / 이전계좌: {prev_account} → 생략")
                 return False
@@ -158,8 +167,6 @@ class AutoTradeExecutor(ChejanHandlerMixin):
             return False
 
         rate = (prev_price - current_price) / prev_price * 100
-
-        # 하락률 디버그 로그
         self.log_once(
             f"[📉 하락률 평가] {code} / 기준가: {prev_price} / 현재가: {current_price} / "
             f"하락률: {rate:.2f}% / 필요조건: {drop_rate}%"
@@ -172,11 +179,6 @@ class AutoTradeExecutor(ChejanHandlerMixin):
         return True
 
 
-
-
-
-    
-    
     def send_buy_order(self, code, account_no, current_price, amount, order_type, step):
         if amount <= 0 or current_price <= 0:
             self.log_once(f"[❌ 매수불가] 잘못된 금액 또는 가격 ({amount} / {current_price})")
